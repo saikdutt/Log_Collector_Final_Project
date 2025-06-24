@@ -21,14 +21,15 @@ public:
     // NVM configuration functions
     void writeDebugConf();
     void addTroubleshootTag();
-    void removeTroubleshootTag();
+    //void removeTroubleshootTag();
     void findNVMAgentProcesses();
     // KDF debugging functions
     void setKDFDebugFlag();
     void resetKDFDebugFlag();
 
     // Umbrella configuration
-    void AddupdateOrgInfo();
+    //void AddupdateOrgInfo();
+    void createSWGConfigOverride();
     void backupServiceProfile();
     void restoreServiceProfile();
     void collectKDFLogs();
@@ -37,10 +38,9 @@ public:
     void organizeAndArchiveLogs();
     void removeDebugConf();
     void clearKDFDebugFlag();
-    void resetOrgInfo();
+    void deleteSWGConfigOverride();
+    //void resetOrgInfo();
     void collectLogsWithTimer();
-    // void collectBrowserHarLogs();
-    // std::string formatBrowserTime(const std::chrono::system_clock::time_point& time);
 };
 
 #endif // MAC_COLLECTOR_H

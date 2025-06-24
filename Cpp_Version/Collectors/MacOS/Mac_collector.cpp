@@ -159,6 +159,7 @@ void NVMLogCollectorMac::initializePaths() {
 // Write the debug flag to nvm_dbg.conf
 void NVMLogCollectorMac::writeDebugConf() {
     auto logger = std::make_shared<Logger>("logcollector.log");
+    logger->info("Enter the debug value");
     int value;
     cin >> value;
     ofstream conf(CONF_FILE);
@@ -277,96 +278,6 @@ void NVMLogCollectorMac::addTroubleshootTag() {
         exit(1);
     }
 }
-void NVMLogCollectorMac::removeTroubleshootTag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    // Check if XML file exists
-    if (!fs::exists(XML_FILE)) {
-        logger->error("[!] XML file not found: " + XML_FILE);
-        return;
-    }
-    // Read the file
-    ifstream inFile(XML_FILE);
-    string xmlContent;
-    string line;
-
-    if (!inFile) {
-        logger->error("[!] Cannot open XML file: " + XML_FILE);
-        return;
-    }
-
-    while (getline(inFile, line)) {
-        xmlContent += line + "\n";
-    }
-    inFile.close();
-
-    // Check for existing TroubleShoot tags and remove them
-    size_t startPos = 0;
-    size_t tagStartPos = 0;
-    size_t tagEndPos = 0;
-    bool existingTagsRemoved = false;
-    
-    // To store what patterns were removed
-    vector<string> removedPatterns;
-    
-    // Search for any TroubleShoot tags and remove them
-    while ((startPos = xmlContent.find("<TroubleShoot>", startPos)) != string::npos) {
-        tagStartPos = startPos;
-        
-        // Extract pattern before removing
-        size_t patternStart = xmlContent.find("<Pattern>", startPos);
-        size_t patternEnd = xmlContent.find("</Pattern>", patternStart);
-        
-        if (patternStart != string::npos && patternEnd != string::npos) {
-            string pattern = xmlContent.substr(
-                patternStart + 9,  // Length of "<Pattern>"
-                patternEnd - (patternStart + 9)
-            );
-            removedPatterns.push_back(pattern);
-        }
-        
-        tagEndPos = xmlContent.find("</TroubleShoot>", startPos);
-        if (tagEndPos != string::npos) {
-            tagEndPos += 15; // Length of "</TroubleShoot>"
-            
-            // Remove the entire tag
-            xmlContent.erase(tagStartPos, tagEndPos - tagStartPos);
-            existingTagsRemoved = true;
-            // Start search from the beginning since content has changed
-            startPos = 0;
-        } else {
-            // Move past this occurrence if no end tag found
-            startPos += 14; // Length of "<TroubleShoot>"
-        }
-    }
-    
-    // Write back to file if changes were made
-    if (existingTagsRemoved) {
-        ofstream outFile(XML_FILE);
-        if (outFile) {
-            outFile << xmlContent;
-            outFile.close();
-
-            logger->info("[+] Removed TroubleShoot tags from XML file.");
-
-            // Report what was removed
-            if (!removedPatterns.empty()) {
-                logger->info("[*] Removed patterns:");
-                for (const string& pattern : removedPatterns) {
-                    if (pattern.find("NVM-TRACE-FLOWS") != string::npos) {
-                        logger->info("    - Flow tracing");
-                    }
-                    if (pattern.find("PROCESS-TREE-INFO") != string::npos) {
-                        logger->info("    - Process tree information");
-                    }
-                }
-            }
-        } else {
-            logger->error("[!] Failed to write to XML file. Check permissions.");
-        }
-    } else {
-        logger->info("[!] No TroubleShoot tags found in XML file.");
-    }
-}
 void NVMLogCollectorMac::setKDFDebugFlag() {
     auto logger = std::make_shared<Logger>("logcollector.log");
     string SYSTEM_KDF_PATH = "/opt/cisco/secureclient/kdf/";
@@ -436,10 +347,10 @@ void NVMLogCollectorMac::resetKDFDebugFlag() {
         logger->error("[!] Failed to reset KDF debug flag");
     }
 }
-void NVMLogCollectorMac::AddupdateOrgInfo() {
+void NVMLogCollectorMac::createSWGConfigOverride() {
     auto logger = std::make_shared<Logger>("logcollector.log");
     string UMBRELLA_PATH = "/opt/cisco/secureclient/umbrella/";
-    string ORG_INFO_FILE = UMBRELLA_PATH + "OrgInfo.json";
+    string CONFIG_OVERRIDE_FILE = UMBRELLA_PATH + "SWGConfigOverride.json";
 
     // Check if directory exists, create if it doesn't
     if (!fs::exists(UMBRELLA_PATH)) {
@@ -452,56 +363,69 @@ void NVMLogCollectorMac::AddupdateOrgInfo() {
         }
     }
 
-    // Create or overwrite the OrgInfo.json file
-    ofstream orgFile(ORG_INFO_FILE, ios::trunc);
-    if (orgFile) {
+    // Create or overwrite the SWGConfigOverride.json file
+    ofstream configFile(CONFIG_OVERRIDE_FILE, ios::trunc);
+    if (configFile) {
         // Format the JSON with proper indentation
-        orgFile << "{\n"
-                << "\t\"organisationId\": \"2598416\",\n"
-                << "\t\"fingerprint\": \"2ed3f2d2a8a6d5f4441ee349f7315a9a\",\n"
-                << "\t\"UserId\": \"10789072\"\n"
-                << "}" << endl;
+        configFile << "{\n"
+                  << "\t\"organisationId\": \"2598416\",\n"
+                  << "\t\"fingerprint\": \"2ed3f2d2a8a6d5f4441ee349f7315a9a\",\n"
+                  << "\t\"UserId\": \"10789072\"\n"
+                  << "}" << endl;
         
-        orgFile.close();
-
-        logger->info("[+] Successfully updated " + ORG_INFO_FILE);
+        configFile.close();
+        logger->info("[+] Successfully created " + CONFIG_OVERRIDE_FILE);
     } else {
-        logger->error("[!] Failed to write to " + ORG_INFO_FILE);
+        logger->error("[!] Failed to write to " + CONFIG_OVERRIDE_FILE);
         logger->error("[!] Make sure you're running with sudo privileges.");
     }
+    
+    logger->info("[+] SWG Config Override setup completed successfully");
 }
-void NVMLogCollectorMac::resetOrgInfo() {
+void NVMLogCollectorMac::deleteSWGConfigOverride() {
     auto logger = std::make_shared<Logger>("logcollector.log");
     string UMBRELLA_PATH = "/opt/cisco/secureclient/umbrella/";
-    string ORG_INFO_FILE = UMBRELLA_PATH + "OrgInfo.json";
+    string CONFIG_OVERRIDE_FILE = UMBRELLA_PATH + "SWGConfigOverride.json";
 
-    // Check if directory exists, create if it doesn't
-    if (!fs::exists(UMBRELLA_PATH)) {
+    // Check if file exists before attempting to delete
+    if (fs::exists(CONFIG_OVERRIDE_FILE)) {
         try {
-            fs::create_directories(UMBRELLA_PATH);
-            logger->info("[+] Created Umbrella directory at: " + UMBRELLA_PATH);
+            // Remove the file
+            fs::remove(CONFIG_OVERRIDE_FILE);
+            logger->info("[+] Successfully deleted " + CONFIG_OVERRIDE_FILE);
+
+            Restart Cisco Umbrella service
+            logger->info("[*] Restarting Cisco Umbrella service...");
+            
+            // First, find and kill the Umbrella process
+            string killCmd = "sudo pkill -f 'acumbrellaagent'";
+            int killResult = system(killCmd.c_str());
+            
+            if (killResult == 0) {
+                logger->info("[+] Successfully stopped Umbrella agent");
+            } else {
+                logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
+            }
+
+            // Give the system a moment to clean up
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+
+            // Start the Umbrella agent again
+            string startCmd = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+            int startResult = system(startCmd.c_str());
+            
+            if (startResult == 0) {
+                logger->info("[+] Successfully restarted Umbrella agent");
+            } else {
+                logger->error("[!] Failed to restart Umbrella agent");
+            }
+
         } catch (const fs::filesystem_error& e) {
-            logger->error("[!] Error creating directory: " + string(e.what()));
-            return;
+            logger->error("[!] Error deleting file: " + string(e.what()));
+            logger->error("[!] Make sure you have proper permissions");
         }
-    }
-
-    // Create or overwrite the OrgInfo.json file
-    ofstream orgFile(ORG_INFO_FILE, ios::trunc);
-    if (orgFile) {
-        // Format the JSON with proper indentation
-        orgFile << "{\n"
-                << "\t\"organisationId\": \"1912899\",\n"
-                << "\t\"fingerprint\": \"c2991d0674627e35c5b0f2397adb7795\",\n"
-                << "\t\"UserId\": \"8278039\"\n"
-                << "}" << endl;
-        
-        orgFile.close();
-
-        logger->info("[+] Successfully Reset Umbrella OrgInfo.json" + ORG_INFO_FILE);
     } else {
-        logger->error("[!] Failed to write to " + ORG_INFO_FILE);
-        logger->error("[!] Make sure you're running with sudo privileges.");
+        logger->warning("[!] SWGConfigOverride.json file not found at: " + CONFIG_OVERRIDE_FILE);
     }
 }
 void NVMLogCollectorMac::findNVMAgentProcesses() {
@@ -746,7 +670,6 @@ void NVMLogCollectorMac::organizeAndArchiveLogs() {
                          desktopPath + "/PacketCapture.pcap " +
                          desktopPath + "/DART_Bundle.zip " +
                          desktopPath + "/swg_umbrella_logs.log " +
-                         desktopPath + "/browser.json " +
                          nvmLogsDir + "/ 2>/dev/null";
     
     logger->info("Moving log files to nvm_logs directory");
