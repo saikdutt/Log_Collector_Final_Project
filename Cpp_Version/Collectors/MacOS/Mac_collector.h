@@ -32,7 +32,7 @@ public:
     void createSWGConfigOverride();
     void backupServiceProfile();
     void restoreServiceProfile();
-    void collectKDFLogs();
+    // void collectKDFLogs();
     void collectAllLogsSimultaneously();
     void collectDARTLogs();
     void organizeAndArchiveLogs();
@@ -41,6 +41,7 @@ public:
     void deleteSWGConfigOverride();
     //void resetOrgInfo();
     void collectLogsWithTimer();
+    void deleteLogCollectorFile();
 };
 
 #endif // MAC_COLLECTOR_H

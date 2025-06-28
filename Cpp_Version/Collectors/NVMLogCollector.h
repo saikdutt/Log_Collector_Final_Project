@@ -21,28 +21,6 @@ public:
                   bool enable_debug_logs = false,
                   int debug_level = 0,
                   const std::string& nvm_version = "5.1");
-    
-     // NVM configuration functions
-    void writeDebugConf();
-    void addTroubleshootTag();
-    void removeTroubleshootTag();
-    void findNVMAgentProcesses();
-    // KDF debugging functions
-    void setKDFDebugFlag();
-    void resetKDFDebugFlag();
-
-    // Umbrella configuration
-    void AddupdateOrgInfo();
-    void backupServiceProfile();
-    void restoreServiceProfile();
-    void collectKDFLogs();
-    void collectAllLogsSimultaneously();
-    void collectDARTLogs();
-    void organizeAndArchiveLogs();
-    void removeDebugConf();
-    void clearKDFDebugFlag();
-    void resetOrgInfo();
-    void collectLogsWithTimer();
 };
 
 #endif // NVM_LOG_COLLECTOR_H

@@ -19,9 +19,18 @@ int main() {
     // Create configuration
     std::map<std::string, std::string> config;
     config["log_file"] = "logcollector.log";
-            
-    // Create NVM collector for macOS
-    NVMLogCollectorMac collector(config, logger);
+    #ifdef __APPLE__
+        // Create NVM collector for macOS
+        NVMLogCollectorMac collector(config, logger);
+    #elif defined(_WIN32)
+        // Create NVM collector for Windows
+        NVMLogCollectorWindows collector(config, logger);
+    #elif defined(__linux__)
+        // Create NVM collector for Linux
+        NVMLogCollectorLinux collector(config, logger);
+    #else
+        #error "Unsupported platform"
+    #endif
     try
     {
         // Get NVM version
@@ -33,11 +42,10 @@ int main() {
         collector.writeDebugConf();
         collector.backupServiceProfile();
         collector.addTroubleshootTag();
-        collector.findNVMAgentProcesses();
         collector.createSWGConfigOverride();
         logger->info("Enter the hexadecimal KDF value");
         collector.setKDFDebugFlag();
-        collector.collectKDFLogs();
+        collector.findNVMAgentProcesses();
         logger->info("KDF Logs Collected Sucessfully");
         collector.collectAllLogsSimultaneously();
         collector.collectDARTLogs();
@@ -47,6 +55,7 @@ int main() {
         collector.findNVMAgentProcesses();
         collector.deleteSWGConfigOverride();
         collector.organizeAndArchiveLogs();
+        collector.deleteLogCollectorFile();
     }
     catch(const std::exception& e)
     {

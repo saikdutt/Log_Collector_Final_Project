@@ -10,6 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(SOURCES
     main.cpp
     Utils/Logger.cpp
+    Utils/Error.cpp
     Collectors/BaseCollector.cpp
     Collectors/NVMLogCollector.cpp
     Collectors/SWGLogCollector.cpp

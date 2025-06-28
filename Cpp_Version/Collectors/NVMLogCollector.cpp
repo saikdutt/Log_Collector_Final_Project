@@ -37,5 +37,5 @@ NVMLogCollector::NVMLogCollector(
       enable_kdf_logging(false),
       nvm_version(nvm_version) {
     
-    logger->debug("NVMLogCollector initialized with NVM version: " + nvm_version);
+    logger->debug("NVMLogCollector initialized");
 }
