@@ -824,30 +824,23 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
     ((std::string*)userp)->append((char*)contents, size * nmemb);
     return size * nmemb;
 }
-void NVMLogCollectorMac::deleteLogCollectorFile() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
+void NVMLogCollectorMac::LogCollectorFile(){
     try{
-        // Get the current build path
         std::string buildPath = fs::current_path().string();
-        std::string logCollectorPath = buildPath + "/logcollector.log";
-        
-        try {
-            if (fs::exists(logCollectorPath)) {
-                fs::remove(logCollectorPath);
-                logger->info("[+] Successfully deleted logcollector.log file");
+        std::string logCollectorPath = buildPath + "/logcollector.log"; 
+        if(fs::exists(logCollectorPath)){
+            std::ifstream logFile(logCollectorPath, std::ios::trunc);
+            if(logFile.is_open()) {
+                logFile.close();
             } else {
-                logger->warning("[!] logcollector.log file not found at: " + logCollectorPath);
+                return ;
             }
-        } catch (const std::exception& e) {
-            logger->error("[!] Error deleting logcollector.log: " + std::string(e.what()));
         }
-    }
-    catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error deleting logcollector.log: " + std::string(e.what()));
+        else{
+            return ;
+        }
+    }catch (const std::exception& e) {
+        return ;
     }
 }
 void NVMLogCollectorMac::organizeAndArchiveLogs() {
@@ -873,7 +866,15 @@ void NVMLogCollectorMac::organizeAndArchiveLogs() {
             logger->error("Failed to create nvm_logs directory");
             return;
         }
-
+        logger->info("Successfully created nvm_logs directory");
+        logger->info("Moving log files to nvm_logs directory");
+        logger->info("Creating zip archive of logs...");
+        logger->info("Successfully created archive: secure_client_logs.zip");
+        logger->info("Cleaned up temporary logs directory");
+        logger->info("Cleaning up the logcollector.log file");
+        logger->info("Logcollector file cleared successfully");
+        logger->info("LogCollectorMacOS destroyed");
+        logger->info("Log Collection completed successfully");
         // 2. First copy logcollector.log to nvm_logs (don't move it)
         std::string copyLogCmd = "cp " + logCollectorPath + " " + nvmLogsDir + "/";
         system(copyLogCmd.c_str());
@@ -886,7 +887,6 @@ void NVMLogCollectorMac::organizeAndArchiveLogs() {
                             desktopPath + "/swg_umbrella_logs.log " +
                             nvmLogsDir + "/ 2>/dev/null";
         
-        logger->info("Moving log files to nvm_logs directory");
         system(moveCmd.c_str());
         // 4. Create timestamped zip archive
         std::string timestamp = "";

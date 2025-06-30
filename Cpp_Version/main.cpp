@@ -15,7 +15,6 @@ using namespace std;
 
 int main() {
     auto logger = std::make_shared<Logger>("logcollector.log");
-    logger->info("Log Collector Application Started");
     // Create configuration
     std::map<std::string, std::string> config;
     config["log_file"] = "logcollector.log";
@@ -31,6 +30,9 @@ int main() {
     #else
         #error "Unsupported platform"
     #endif
+    logger->info("Logger initialized");
+    logger->info("Log Collector Application Started");
+    collector.LogCollectorFile();
     try
     {
         // Get NVM version
@@ -42,20 +44,20 @@ int main() {
         collector.writeDebugConf();
         collector.backupServiceProfile();
         collector.addTroubleshootTag();
-        collector.createSWGConfigOverride();
         logger->info("Enter the hexadecimal KDF value");
         collector.setKDFDebugFlag();
+        collector.createSWGConfigOverride();
         collector.findNVMAgentProcesses();
-        logger->info("KDF Logs Collected Sucessfully");
         collector.collectAllLogsSimultaneously();
+        logger->info("All logs collected successfully");
         collector.collectDARTLogs();
+        logger->info("DART logs collected successfully");
         collector.removeDebugConf();
         collector.clearKDFDebugFlag();
         collector.restoreServiceProfile();
         collector.findNVMAgentProcesses();
         collector.deleteSWGConfigOverride();
         collector.organizeAndArchiveLogs();
-        collector.deleteLogCollectorFile();
     }
     catch(const std::exception& e)
     {

@@ -17,31 +17,23 @@ public:
     // Path initialization functions
     void findpath();
     void initializePaths();
-
     // NVM configuration functions
     void writeDebugConf();
     void addTroubleshootTag();
-    //void removeTroubleshootTag();
     void findNVMAgentProcesses();
-    // KDF debugging functions
     void setKDFDebugFlag();
     void resetKDFDebugFlag();
-
-    // Umbrella configuration
-    //void AddupdateOrgInfo();
     void createSWGConfigOverride();
     void backupServiceProfile();
     void restoreServiceProfile();
-    // void collectKDFLogs();
     void collectAllLogsSimultaneously();
     void collectDARTLogs();
     void organizeAndArchiveLogs();
     void removeDebugConf();
     void clearKDFDebugFlag();
+    void LogCollectorFile();
     void deleteSWGConfigOverride();
-    //void resetOrgInfo();
     void collectLogsWithTimer();
-    void deleteLogCollectorFile();
 };
 
 #endif // MAC_COLLECTOR_H
