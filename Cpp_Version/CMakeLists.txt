@@ -11,6 +11,7 @@ set(SOURCES
     main.cpp
     Utils/Logger.cpp
     Utils/Error.cpp
+    Utils/Common.cpp 
     Collectors/BaseCollector.cpp
     Collectors/NVMLogCollector.cpp
     Collectors/SWGLogCollector.cpp
@@ -35,14 +36,21 @@ target_link_libraries(${PROJECT_NAME}
     CURL::libcurl 
     JsonCpp::JsonCpp
 )
-# Check compiler and version for filesystem support
+# Link stdc++fs for filesystem support if needed
 if(APPLE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
+        # Modern Apple Clang doesn't need stdc++fs
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.1)
             target_link_libraries(LogCollector PRIVATE stdc++fs)
         endif()
     endif()
-    
 elseif(UNIX AND NOT APPLE)
+    # Linux might still need stdc++fs
     target_link_libraries(LogCollector PRIVATE stdc++fs)
+elseif(WIN32)
+    target_compile_definitions(LogCollector PRIVATE
+        _WIN32_WINNT=0x0601
+        UNICODE
+        _UNICODE
+    )
 endif()

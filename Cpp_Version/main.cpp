@@ -1,5 +1,6 @@
 #include <iostream>
 #include "Utils/Logger.h"
+#include "Utils/Error.h"
 // Platform-specific collector includes
 #ifdef __APPLE__
     #include "./Collectors/MacOS/Mac_collector.h"

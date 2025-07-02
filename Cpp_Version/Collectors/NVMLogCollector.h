@@ -5,7 +5,7 @@
 #include <memory>
 #include "BaseCollector.h"
 
-class NVMLogCollector : public BaseCollector {
+class NVMLogCollector : public virtual BaseCollector {
 protected:
     bool enable_debug_logs;
     int debug_level;

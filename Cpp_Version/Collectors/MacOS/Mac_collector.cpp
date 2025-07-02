@@ -24,13 +24,9 @@ namespace fs = std::filesystem;
 #include "Mac_collector.h"
 #include "../../Utils/Logger.h"
 #include "../../Utils/Error.h"
+#include "../../Utils/Common.h"
 // Declare the global signal status variable from main.cpp
 using namespace std;
-extern volatile sig_atomic_t gSignalStatus;
-std::string SYSTEM_NVM_PATH;
-std::string NVM_PATH;
-std::string CONF_FILE;
-std::string XML_FILE;
 
 // Constructor implementation
 NVMLogCollectorMac::NVMLogCollectorMac(const std::map<std::string, std::string>& config, 
@@ -47,19 +43,11 @@ NVMLogCollectorMac::~NVMLogCollectorMac() {
     auto logger = std::make_shared<Logger>("logcollector.log");
     logger->info("NVMLogCollectorMac destroyed");
 }
-std::atomic<bool> g_stopCollection(false);
 
-// Signal handler
-void signalHandler(int signum) {
-    if (signum == SIGINT) {
-        g_stopCollection = true;
-    }
-}
 void NVMLogCollectorMac::get_nvm_version() {
     // Use the class member logger instead of creating a new one
     auto logger = std::make_shared<Logger>("logcollector.log");
     logger->info("Getting NVM agent version...");
-    
     try {
         // Create a pipe to capture command output
         std::array<char, 128> buffer;
@@ -137,7 +125,7 @@ void NVMLogCollectorMac::findpath(){
         return;
     #elif defined(__linux__)
         // Linux path
-        SYSTEM_NVM_PATH="/opt/cisco/secure-client/nvm/";
+        SYSTEM_NVM_PATH="/opt/cisco/secureclient/NVM/";
         return;
     #else
         // Fallback path
@@ -556,6 +544,45 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
         } else {
             logger->warning("No NVM agent PID found");
         }
+        std::string killCmd = "sudo pkill -f 'acnvmagent'";
+        int killResult = system(killCmd.c_str());
+        
+        if (killResult == 0) {
+            logger->info("[+] Successfully stopped NVM agent");
+        } else {
+            logger->warning("[!] NVM agent was not running or couldn't be stopped");
+        }
+        std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
+        int startResult = system(startCmd.c_str());
+        
+        if (startResult == 0) {
+            logger->info("[+] Successfully started NVM agent");
+        } else {
+            logger->error("[!] Failed to start NVM agent");
+        }
+        std::string killCmd1 = "sudo pkill -f 'acumbrellaagent'";
+        int killResult1 = system(killCmd1.c_str());
+
+        if (killResult1 == 0) {
+            logger->info("[+] Successfully stopped Umbrella agent");
+        } else {
+            logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
+        }
+
+        // Start Umbrella agent
+        std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+        int startResult1 = system(startCmd1.c_str());
+
+        if (startResult1 == 0) {
+            logger->info("[+] Successfully started Umbrella agent");
+        } else {
+            logger->error("[!] Failed to start Umbrella agent");
+        }
+        for (int i = 30; i > 0; i--) {
+            std::cout << "\r\033[K" << "Starting in " << i << " seconds..." << std::flush;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        std::cout << "\r\033[K" << "Starting log collection..." << std::endl;
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
@@ -671,8 +698,8 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
         // Kill all collection processes
         std::vector<std::pair<std::string, std::string>> killCommands = {
             {"sudo pkill -f 'log stream.*com.cisco.anyconnect.macos.acsockext' || true", "KDF Logs"},
-            {"sudo pkill -f 'log stream.*acnvmagent' || true", "NVM System Logs"},
-            {"sudo pkill -f 'log stream.*acumbrellaagent' || true", "Umbrella/SWG Logs"},
+            {"sudo pkill -f 'acnvmagent' || true", "NVM System Logs"},
+            {"sudo pkill -f 'acumbrellaagent' || true", "Umbrella/SWG Logs"},
             {"sudo killall tcpdump || true", "Packet Capture"},
         };
 
@@ -687,6 +714,22 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
             }
         }
         logger->info("Logs have been saved to the Desktop");
+        std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
+        int startResult = system(startCmd.c_str());
+        
+        if (startResult == 0) {
+            logger->info("[+] Successfully started NVM agent");
+        } else {
+            logger->error("[!] Failed to start NVM agent");
+        }
+        std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+        int startResult1 = system(startCmd1.c_str());
+
+        if (startResult1 == 0) {
+            logger->info("[+] Successfully started Umbrella agent");
+        } else {
+            logger->error("[!] Failed to start Umbrella agent");
+        }
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
@@ -825,11 +868,13 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
     return size * nmemb;
 }
 void NVMLogCollectorMac::LogCollectorFile(){
+    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         std::string buildPath = fs::current_path().string();
         std::string logCollectorPath = buildPath + "/logcollector.log"; 
         if(fs::exists(logCollectorPath)){
             std::ifstream logFile(logCollectorPath, std::ios::trunc);
+            logger->info("Log file found and truncated: " + logCollectorPath);
             if(logFile.is_open()) {
                 logFile.close();
             } else {
