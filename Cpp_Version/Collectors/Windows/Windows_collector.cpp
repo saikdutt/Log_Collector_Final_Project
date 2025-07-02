@@ -64,7 +64,7 @@ void NVMLogCollectorWindows::get_nvm_version() {
         std::string result;
         
         // Command to get NVM agent version (Windows version)
-        std::string cmd ="\"C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\nvm\\bin\\acnvmagent.exe\" -v";
+        std::string cmd ="\"C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\NVM\\acnvmagent.exe\" -v";
         
         // Execute command and capture output
         FILE* pipe = POPEN(cmd.c_str(), "r");
@@ -366,63 +366,112 @@ void NVMLogCollectorWindows::findNVMAgentProcesses() {
         if (!pid.empty()) {
             logger->info("Found NVM agent PID: " + pid);
             
-            // Use the PID to terminate the process in Windows
+            // Stop the NVM agent
             std::string killCmd = "taskkill /F /PID " + pid;
             int result = system(killCmd.c_str());
             
             if (result == 0) {
                 logger->info("Successfully terminated NVM agent process");
+                
+                // Wait briefly to ensure clean shutdown
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                
+                // Start the NVM agent
+                std::string startCmd = "\"C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\NVM\\acnvmagent.exe\"";
+                int startResult = system(startCmd.c_str());
+                
+                if (startResult == 0) {
+                    logger->info("[+] Successfully restarted NVM agent");
+                } else {
+                    logger->error("[!] Failed to start NVM agent");
+                }
             } else {
                 logger->error("Failed to terminate process with PID: " + pid);
             }
         } else {
             logger->warning("No NVM agent PID found");
         }
-        std::string killCmd = "taskkill /F /IM acnvmagent.exe";
-        int killResult = system(killCmd.c_str());
+        logger->info("Searching for Umbrella agent processes...");
 
-        if (killResult == 0) {
-            logger->info("[+] Successfully stopped NVM agent");
+        // Command to find Umbrella agent processes in Windows
+        std::string umbrellaCmd1 = "tasklist /FI \"IMAGENAME eq acumbrellaagent.exe\" /FO TABLE";
+
+        int umbrellaResult1 = system(umbrellaCmd1.c_str());
+
+        if (umbrellaResult1 == 0) {
+            logger->info("Umbrella agent processes found and displayed");
         } else {
-            logger->warning("[!] NVM agent was not running or couldn't be stopped");
+            logger->warning("Command execution returned non-zero status: " + std::to_string(umbrellaResult1));
         }
 
-        // Start NVM agent
-        std::string startCmd = "\"C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\nvm\\bin\\acnvmagent.exe\"";
-        int startResult = system(startCmd.c_str());
+        // Create a pipe to capture command output
+        std::array<char, 128> umbrellaBuffer;
+        std::string umbrellaResult;
+        std::string umbrellaCmd = "tasklist /FI \"IMAGENAME eq acumbrellaagent.exe\" /FO CSV";
 
-        if (startResult == 0) {
-            logger->info("[+] Successfully started NVM agent");
+        FILE* umbrellaPipe = POPEN(umbrellaCmd.c_str(), "r");
+        if (!umbrellaPipe) {
+            logger->error("Failed to execute Umbrella process search command");
+            return;
+        }
+
+        // Read the command output
+        while (fgets(umbrellaBuffer.data(), umbrellaBuffer.size(), umbrellaPipe) != nullptr) {
+            umbrellaResult += umbrellaBuffer.data();
+        }
+        PCLOSE(umbrellaPipe);
+
+        // Parse the output to get PID
+        std::istringstream umbrellaStream(umbrellaResult);
+        std::string umbrellaLine;
+        std::string umbrellaPid;
+
+        // Skip header line
+        std::getline(umbrellaStream, umbrellaLine);
+
+        if (std::getline(umbrellaStream, umbrellaLine)) {
+            // CSV format: "Image Name","PID","Session Name","Session#","Mem Usage"
+            // Parse CSV format
+            size_t firstQuote = umbrellaLine.find('"');
+            size_t secondQuote = umbrellaLine.find('"', firstQuote + 1);
+            size_t thirdQuote = umbrellaLine.find('"', secondQuote + 1);
+            size_t fourthQuote = umbrellaLine.find('"', thirdQuote + 1);
+            
+            if (firstQuote != std::string::npos && secondQuote != std::string::npos && 
+                thirdQuote != std::string::npos && fourthQuote != std::string::npos) {
+                // Extract PID which is between 3rd and 4th quotes
+                umbrellaPid = umbrellaLine.substr(thirdQuote + 1, fourthQuote - thirdQuote - 1);
+            }
+        }
+
+        if (!umbrellaPid.empty()) {
+            logger->info("Found Umbrella agent PID: " + umbrellaPid);
+            
+            // Stop the Umbrella agent
+            std::string umbrellaKillCmd = "taskkill /F /PID " + umbrellaPid;
+            int umbrellaResult = system(umbrellaKillCmd.c_str());
+            
+            if (umbrellaResult == 0) {
+                logger->info("Successfully terminated Umbrella agent process");
+                
+                // Wait briefly to ensure clean shutdown
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                
+                // Start the Umbrella agent
+                std::string umbrellaStartCmd = "\"C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\umbrella\\acumbrellaagent.exe\"";
+                int umbrellaStartResult = system(umbrellaStartCmd.c_str());
+                
+                if (umbrellaStartResult == 0) {
+                    logger->info("[+] Successfully restarted Umbrella agent");
+                } else {
+                    logger->error("[!] Failed to start Umbrella agent");
+                }
+            } else {
+                logger->error("Failed to terminate Umbrella process with PID: " + umbrellaPid);
+            }
         } else {
-            logger->error("[!] Failed to start NVM agent");
+            logger->warning("No Umbrella agent PID found");
         }
-
-        // Kill Umbrella agent
-        std::string killCmd1 = "taskkill /F /IM acumbrellaagent.exe";
-        int killResult1 = system(killCmd1.c_str());
-
-        if (killResult1 == 0) {
-            logger->info("[+] Successfully stopped Umbrella agent");
-        } else {
-            logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
-        }
-
-        // Start Umbrella agent
-        std::string startCmd1 = "\"C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\umbrella\\acumbrellaagent.exe\"";
-        int startResult1 = system(startCmd1.c_str());
-
-        if (startResult1 == 0) {
-            logger->info("[+] Successfully started Umbrella agent");
-        } else {
-            logger->error("[!] Failed to start Umbrella agent");
-        }
-
-        // Wait for services to start
-        for (int i = 30; i > 0; i--) {
-            std::cout << "\r\033[K" << "Starting in " << i << " seconds..." << std::flush;
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-        std::cout << "\r\033[K" << "Starting log collection..." << std::endl;
     }catch(const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
@@ -434,11 +483,10 @@ void NVMLogCollectorWindows::removeDebugConf() {
     auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Removing NVM debug configuration file...");
-    
         std::string cmd = "del \"C:\\ProgramData\\Cisco\\Cisco Secure Client\\NVM\\nvm_dbg.conf\"";
-        
+
         int result = system(cmd.c_str());
-        
+
         if (result == 0) {
             logger->info("Successfully removed nvm_dbg.conf");
         } else {

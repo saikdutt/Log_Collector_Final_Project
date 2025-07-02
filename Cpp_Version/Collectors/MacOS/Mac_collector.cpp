@@ -19,7 +19,7 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <signal.h>
 #include <iomanip>
-#include <json/json.h> 
+//#include <json/json.h> 
 #include <curl/curl.h>
 #include "Mac_collector.h"
 #include "../../Utils/Logger.h"
@@ -94,10 +94,11 @@ void NVMLogCollectorMac::get_nvm_version() {
                 
                 if (end_pos > pos) {
                     nvm_version = result.substr(pos, end_pos - pos);
-                    logger->info("NVM agent version: " + nvm_version);
                 }
-            }
+            } 
         }
+        logger->info("NVM agent version found: " + nvm_version);
+        logger->info("NVM agent version: " + nvm_version);
         if (nvm_version.empty()) {
             logger->warning("Could not parse NVM version from output: " + result);
             nvm_version = "unknown";
@@ -544,45 +545,109 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
         } else {
             logger->warning("No NVM agent PID found");
         }
-        std::string killCmd = "sudo pkill -f 'acnvmagent'";
-        int killResult = system(killCmd.c_str());
+        logger->info("Searching for Umbrella agent processes...");
+
+        // Command to find Umbrella agent processes
+        std::string umbrellaCmd1 = "ps -ef | grep acumbrellaagent";
+
+        int umbrellaResult1 = system(umbrellaCmd1.c_str());
+
+        if (umbrellaResult1 == 0) {
+            logger->info("Umbrella agent processes found and displayed");
+        } else {
+            logger->warning("Command execution returned non-zero status: " + std::to_string(umbrellaResult1));
+        }
+
+        // Create a pipe to capture command output
+        std::array<char, 128> umbrellaBuffer;
+        std::string umbrellaResult;
+        std::string umbrellaCmd = "ps -ef | grep acumbrellaagent";
+
+        FILE* umbrellaPipe = popen(umbrellaCmd.c_str(), "r");
+        if (!umbrellaPipe) {
+            logger->error("Failed to execute Umbrella process search command");
+            return;
+        }
+
+        // Read the command output
+        while (fgets(umbrellaBuffer.data(), umbrellaBuffer.size(), umbrellaPipe) != nullptr) {
+            umbrellaResult += umbrellaBuffer.data();
+        }
+        pclose(umbrellaPipe);
+
+        // Parse the output to get PID
+        std::istringstream umbrellaStream(umbrellaResult);
+        std::string umbrellaLine;
+        std::string umbrellaPid;
+
+        if (std::getline(umbrellaStream, umbrellaLine)) {
+            std::istringstream umbrellaIss(umbrellaLine);
+            std::string umbrellaColumn;
+            int umbrellaColumnCount = 0;
+                
+            while (umbrellaIss >> umbrellaColumn && umbrellaColumnCount < 2) {
+                if (umbrellaColumnCount == 1) { // Second column
+                    umbrellaPid = umbrellaColumn;
+                    break;
+                }
+                umbrellaColumnCount++;
+            }
+        }
+
+        if (!umbrellaPid.empty()) {
+            logger->info("Found Umbrella agent PID: " + umbrellaPid);
+            
+            // Use the PID to kill the process
+            std::string umbrellaKillCmd = "sudo kill -9 " + umbrellaPid;
+            int umbrellaKillResult = system(umbrellaKillCmd.c_str());
+            
+            if (umbrellaKillResult == 0) {
+                logger->info("Successfully terminated Umbrella agent process");
+            } else {
+                logger->error("Failed to terminate Umbrella process with PID: " + umbrellaPid);
+            }
+        } else {
+            logger->warning("No Umbrella agent PID found");
+        }
+        // std::string killCmd = "sudo pkill -f 'acnvmagent'";
+        // int killResult = system(killCmd.c_str());
         
-        if (killResult == 0) {
-            logger->info("[+] Successfully stopped NVM agent");
-        } else {
-            logger->warning("[!] NVM agent was not running or couldn't be stopped");
-        }
-        std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
-        int startResult = system(startCmd.c_str());
+        // if (killResult == 0) {
+        //     logger->info("[+] Successfully stopped NVM agent");
+        // } else {
+        //     logger->warning("[!] NVM agent was not running or couldn't be stopped");
+        // }
+        // std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
+        // int startResult = system(startCmd.c_str());
         
-        if (startResult == 0) {
-            logger->info("[+] Successfully started NVM agent");
-        } else {
-            logger->error("[!] Failed to start NVM agent");
-        }
-        std::string killCmd1 = "sudo pkill -f 'acumbrellaagent'";
-        int killResult1 = system(killCmd1.c_str());
+        // if (startResult == 0) {
+        //     logger->info("[+] Successfully started NVM agent");
+        // } else {
+        //     logger->error("[!] Failed to start NVM agent");
+        // }
+        // std::string killCmd1 = "sudo pkill -f 'acumbrellaagent'";
+        // int killResult1 = system(killCmd1.c_str());
 
-        if (killResult1 == 0) {
-            logger->info("[+] Successfully stopped Umbrella agent");
-        } else {
-            logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
-        }
+        // if (killResult1 == 0) {
+        //     logger->info("[+] Successfully stopped Umbrella agent");
+        // } else {
+        //     logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
+        // }
 
-        // Start Umbrella agent
-        std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
-        int startResult1 = system(startCmd1.c_str());
+        // // Start Umbrella agent
+        // std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+        // int startResult1 = system(startCmd1.c_str());
 
-        if (startResult1 == 0) {
-            logger->info("[+] Successfully started Umbrella agent");
-        } else {
-            logger->error("[!] Failed to start Umbrella agent");
-        }
-        for (int i = 30; i > 0; i--) {
-            std::cout << "\r\033[K" << "Starting in " << i << " seconds..." << std::flush;
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-        std::cout << "\r\033[K" << "Starting log collection..." << std::endl;
+        // if (startResult1 == 0) {
+        //     logger->info("[+] Successfully started Umbrella agent");
+        // } else {
+        //     logger->error("[!] Failed to start Umbrella agent");
+        // }
+        // for (int i = 30; i > 0; i--) {
+        //     std::cout << "\r\033[K" << "Starting in " << i << " seconds..." << std::flush;
+        //     std::this_thread::sleep_for(std::chrono::seconds(1));
+        // }
+        // std::cout << "\r\033[K" << "Starting log collection..." << std::endl;
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
