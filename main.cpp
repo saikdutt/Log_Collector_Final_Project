@@ -38,10 +38,6 @@ int main() {
     {
         // Get NVM version
         collector.get_nvm_version();
-        logger->info("NVM version: " + collector.get_nvm_version_string());
-        collector.findpath();
-        logger->info("Path successfully found in the system");
-        collector.initializePaths();
         collector.writeDebugConf();
         collector.backupServiceProfile();
         collector.addTroubleshootTag();
@@ -49,16 +45,16 @@ int main() {
         collector.setKDFDebugFlag();
         collector.createSWGConfigOverride();
         collector.findNVMAgentProcesses();
-        collector.collectAllLogsSimultaneously();
-        logger->info("All logs collected successfully");
-        collector.collectDARTLogs();
-        logger->info("DART logs collected successfully");
+        // collector.collectAllLogsSimultaneously();
+        // logger->info("All logs collected successfully");
+        // collector.collectDARTLogs();
+        // logger->info("DART logs collected successfully");
         collector.removeDebugConf();
         collector.clearKDFDebugFlag();
         collector.restoreServiceProfile();
         collector.findNVMAgentProcesses();
         collector.deleteSWGConfigOverride();
-        collector.organizeAndArchiveLogs();
+        //collector.organizeAndArchiveLogs();
     }
     catch(const std::exception& e)
     {

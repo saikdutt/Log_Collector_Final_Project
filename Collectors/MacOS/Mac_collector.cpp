@@ -19,7 +19,7 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <signal.h>
 #include <iomanip>
-//#include <json/json.h> 
+#include <regex>
 #include <curl/curl.h>
 #include "Mac_collector.h"
 #include "../../Utils/Logger.h"
@@ -35,18 +35,15 @@ NVMLogCollectorMac::NVMLogCollectorMac(const std::map<std::string, std::string>&
     int debug_level)
     :BaseCollector(config, logger),
     NVMLogCollector(config, logger, enable_debug_logs, debug_level),
-    SWGLogCollector(config, logger, enable_debug_logs, debug_level){
+    SWGLogCollector(config, logger, enable_debug_logs, debug_level),
+    utils(logger) {
 
     logger->info("NVMCollectorMac initialized with NVM and SWG support.");
 }
 NVMLogCollectorMac::~NVMLogCollectorMac() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     logger->info("NVMLogCollectorMac destroyed");
 }
-
 void NVMLogCollectorMac::get_nvm_version() {
-    // Use the class member logger instead of creating a new one
-    auto logger = std::make_shared<Logger>("logcollector.log");
     logger->info("Getting NVM agent version...");
     try {
         // Create a pipe to capture command output
@@ -54,8 +51,8 @@ void NVMLogCollectorMac::get_nvm_version() {
         std::string result;
         
         // Command to get NVM agent version
-        std::string cmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent -v";
-        
+        std::string cmd = "sudo " + MacPaths::NVM_AGENT + " -v";
+
         // Execute command and capture output
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
@@ -70,37 +67,17 @@ void NVMLogCollectorMac::get_nvm_version() {
         // Close pipe
         int status = pclose(pipe);
         if (status != 0) {
-            logger->warning("Command returned non-zero status: " + std::to_string(status));
+            logger->warning("Command returned to non-zero status: " + std::to_string(status));
         }
         
-        // Parse version from output
-        size_t pos = result.find("Version");
-        if (pos != std::string::npos) {
-            // Extract version number after "Version: "
-            pos = result.find(":", pos);
-            if (pos != std::string::npos) {
-                // Skip the colon and any whitespace
-                pos++;
-                while (pos < result.length() && std::isspace(result[pos])) {
-                    pos++;
-                }
-                
-                // Extract the version number
-                size_t end_pos = pos;
-                while (end_pos < result.length() && 
-                       (std::isdigit(result[end_pos]) || result[end_pos] == '.')) {
-                    end_pos++;
-                }
-                
-                if (end_pos > pos) {
-                    nvm_version = result.substr(pos, end_pos - pos);
-                }
-            } 
-        }
-        logger->info("NVM agent version found: " + nvm_version);
-        logger->info("NVM agent version: " + nvm_version);
-        if (nvm_version.empty()) {
-            logger->warning("Could not parse NVM version from output: " + result);
+        // Parse version from output - improved pattern matching
+        std::regex versionPattern("Version\\s*:\\s*(\\d+\\.\\d+\\.\\d+(?:-\\w+)?)");
+        std::smatch matches;
+        if (std::regex_search(result, matches, versionPattern) && matches.size() > 1) {
+            nvm_version = matches[1].str();
+            logger->info("NVM agent version found: " + nvm_version);
+        } else {
+            logger->warning("Could not parse the NVM version from output : " + result);
             nvm_version = "unknown";
         }
         
@@ -112,374 +89,31 @@ void NVMLogCollectorMac::get_nvm_version() {
         nvm_version = "error";
     }
 }
-std::string NVMLogCollectorMac::get_nvm_version_string() const {
-    return nvm_version;
-}
-void NVMLogCollectorMac::findpath(){
-    #ifdef _WIN32
-        // Windows path
-        SYSTEM_NVM_PATH="C:/ProgramData/Cisco/Cisco Secure Client/NVM/";
-        return;
-    #elif defined(__APPLE__)
-        // macOS path
-        SYSTEM_NVM_PATH="/opt/cisco/secureclient/NVM/";
-        return;
-    #elif defined(__linux__)
-        // Linux path
-        SYSTEM_NVM_PATH="/opt/cisco/secureclient/NVM/";
-        return;
-    #else
-        // Fallback path
-        SYSTEM_NVM_PATH="./cisco_nvm_test/";
-        return;
-    #endif
-}
-// Initialize paths and check permissions
-void NVMLogCollectorMac::initializePaths() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        CONF_FILE = SYSTEM_NVM_PATH + "nvm_dbg.conf";
-        XML_FILE = SYSTEM_NVM_PATH + "NVM_ServiceProfile.xml";
-
-        // Check if we can access the system directory
-        if (!fs::exists(SYSTEM_NVM_PATH)) {
-            logger->info("[!] System NVM directory not found: " + SYSTEM_NVM_PATH);
-            logger->info("[!] You need to run this program with sudo to access system directories.");
-            exit(1);
-        }
-    }
-    catch (const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-        exit(1);
-    }
-    catch (const std::exception& e) {
-        logger->error("Error initializing paths: " + std::string(e.what()));
-        exit(1);
-    }   
-}
-
-// Write the debug flag to nvm_dbg.conf
 void NVMLogCollectorMac::writeDebugConf() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try
-    {
-        logger->info("Enter the debug value");
-        int value;
-        cin >> value;
-        ofstream conf(CONF_FILE);
-        if (conf) {
-            conf << value;
-            conf.close();
-            logger->info("[+] Debug flag value " + std::to_string(value) + " written to " + CONF_FILE);
-        } else {
-            logger->error("[!] Failed to write to " + CONF_FILE);
-            logger->error("[!] Make sure you're running with sudo.");
-            exit(1);
-        }
-    }
-    catch (const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-        exit(1);
-    }
-    catch (const std::exception& e) {
-        logger->error("Error writing debug configuration: " + std::string(e.what()));
-        exit(1);
-    }
+    utils.writeDebugConfSystem(MacPaths::DEBUG_CONF);
 }
-void NVMLogCollectorMac::addTroubleshootTag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        string pattern;
-        logger->info("\nSelect pattern for <TroubleShoot> tag:");
-        logger->info("1. NVM-TRACE-FLOWS");
-        logger->info("2. PROCESS-TREE-INFO");
-        logger->info("3. Combined logging");
-        logger->info("Choice (1-3): ");
-        int patternChoice;
-        cin >> patternChoice;
-        if (patternChoice >= 1 && patternChoice <= 3) {
-            switch (patternChoice) {
-                case 1:
-                    pattern="NVM-TRACE-FLOWS";
-                    break;
-                case 2:
-                    pattern="PROCESS-TREE-INFO";
-                    break;
-                case 3:
-                    pattern="PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
-                    break;
-                default:
-                    cerr << "[!] Invalid choice. Exiting." << endl;
-            }
-        } else if (patternChoice != 4) {
-            cerr << "[!] Invalid choice. Exiting." << endl;
-            return;
-        }
-        // First check if XML file exists
-        if (!fs::exists(XML_FILE)) {
-            cerr << "[!] XML file not found: " << XML_FILE << endl;
-            cerr << "[!] Creating a new XML file with basic structure." << endl;
-                
-            ofstream newXml(XML_FILE);
-            if (newXml) {
-                newXml << "<NVMProfile>\n</NVMProfile>\n";
-                newXml.close();
-            } else {
-                cerr << "[!] Failed to create XML file. Check permissions." << endl;
-                exit(1);
-            }
-        }
-            
-        // Now read the file
-        ifstream inFile(XML_FILE);
-        string xmlContent;
-        string line;
-
-        if (!inFile) {
-            cerr << "[!] Cannot open XML file: " << XML_FILE << endl;
-            exit(1);
-        }
-
-        while (getline(inFile, line)) {
-        xmlContent += line + "\n";
-        }
-        inFile.close();
-
-        // Check for existing TroubleShoot tags and remove them
-        size_t startPos = 0;
-        size_t tagStartPos = 0;
-        size_t tagEndPos = 0;
-        bool existingTagsRemoved = false;
-            
-        // Search for any TroubleShoot tags and remove them
-        while ((startPos = xmlContent.find("<TroubleShoot>", startPos)) != string::npos) {
-            tagStartPos = startPos;
-            tagEndPos = xmlContent.find("</TroubleShoot>", startPos) + 15; // Length of </TroubleShoot>
-                
-            if (tagEndPos != string::npos) {
-                // Remove the entire tag
-                xmlContent.erase(tagStartPos, tagEndPos - tagStartPos);
-                existingTagsRemoved = true;
-                // Start search from the beginning since content has changed
-                startPos = 0;
-            } else {
-                // Move past this occurrence if no end tag found
-                startPos += 14; // Length of <TroubleShoot>
-            }
-        }
-            
-        if (existingTagsRemoved) {
-            logger->info("[*] Removed existing TroubleShoot tags.");
-        }
-
-        // Now add the new TroubleShoot tag
-        size_t profilePos = xmlContent.find("</NVMProfile>");
-        if (profilePos != string::npos) {
-            string insertTag = "  <TroubleShoot>\n    <Pattern>" + pattern + "</Pattern>\n  </TroubleShoot>\n";
-            xmlContent.insert(profilePos, insertTag);
-
-            ofstream outFile(XML_FILE);
-            if (outFile) {
-                outFile << xmlContent;
-                outFile.close();
-                logger->info("[+] Inserted TroubleShoot tag with pattern: " + pattern);
-            } else {
-                logger->error("[!] Failed to write to XML file. Check permissions.");
-                exit(1);
-            }
-        } else {
-            logger->error("[!] Could not find </NVMProfile> tag in XML.");
-            exit(1);
-        }
-    }
-    catch (const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-        exit(1);
-    }
-    catch (const std::exception& e) {
-        logger->error("Error adding TroubleShoot tag: " + std::string(e.what()));
-        exit(1);
-    }
+void NVMLogCollectorMac::removeDebugConf() {
+    utils.removeDebugConfSystem(MacPaths::DEBUG_CONF);
+}
+void NVMLogCollectorMac::addTroubleshootTag() {  
+    utils.addTroubleshootTagSystem(MacPaths::SERVICE_PROFILE);
 }
 void NVMLogCollectorMac::setKDFDebugFlag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    string SYSTEM_KDF_PATH = "/opt/cisco/secureclient/kdf/";
-    string KDF_BIN_PATH = SYSTEM_KDF_PATH + "bin/";
-    
     string hexInput;
     logger->info("\nEnter debug flag (hexadecimal, e.g., 0x20): ");
     cin >> hexInput;
-    
-    try {
-        // Remove "0x" prefix if present
-        if (hexInput.size() > 2 && hexInput.substr(0, 2) == "0x") {
-            hexInput = hexInput.substr(2);
-        }
-        
-        // Convert hex string to unsigned long to handle large values
-        unsigned long debugFlag = stoul(hexInput, nullptr, 16);
-        
-        string acsocktoolPath = KDF_BIN_PATH + "acsocktool";
-        
-        // Check if acsocktool exists
-        if (!fs::exists(acsocktoolPath)) {
-            logger->error("[!] acsocktool not found at: " + acsocktoolPath);
-            return;
-        }
-        
-        // Execute acsocktool command with hex value
-        string cmd = acsocktoolPath + " -sdf 0x" + hexInput;
-        logger->info("[*] Setting KDF debug flag to 0x" + hexInput + "...");
-        
-        if (system(cmd.c_str()) == 0) {
-            logger->info("[+] KDF debug flag set successfully");
-            logger->info("[*] Debug mode: ");
-            
-            if (debugFlag == 0x0) logger->info("Normal Mode (Disabled)");
-            else if (debugFlag == 0x20) logger->info("Process Parameter Collection");
-            else if (debugFlag == 0x40) logger->info("CMID and Token Logging");
-            else if (debugFlag == 0x60) logger->info("Combined Process and Auth");
-            else if (debugFlag == 0x80) logger->info("Process Tree Debug");
-            else if (debugFlag == 0x100) logger->info("EVE Mercury Info");
-            else if (debugFlag == 0xFFFFFFFF) logger->info("Full Debug (all components)");
-            else logger->info("Custom Debug Level");
-        } else {
-            cerr << "[!] Failed to set KDF debug flag" << endl;
-        }
-    } catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    } catch (const std::exception& e) {
-        logger->error("Error setting KDF debug flag: " + std::string(e.what()));
-    }
+    utils.setKDFDebugFlagSystem(MacPaths::ACSOCKTOOL, hexInput);
 }
-void NVMLogCollectorMac::resetKDFDebugFlag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try
-    {
-        string SYSTEM_KDF_PATH = "/opt/cisco/secureclient/kdf/";
-        string KDF_BIN_PATH = SYSTEM_KDF_PATH + "bin/";
-        string acsocktoolPath = KDF_BIN_PATH + "acsocktool";
-
-        if (!fs::exists(acsocktoolPath)) {
-            cerr << "[!] acsocktool not found at: " << acsocktoolPath << endl;
-            return;
-        }
-
-        logger->info("[*] Resetting KDF debug flag...");
-        string cmd = acsocktoolPath + " -cdf";  // Clear Debug Flag command
-        
-        if (system(cmd.c_str()) == 0) {
-            logger->info("[+] KDF debug flag reset successfully");
-        } else {
-            logger->error("[!] Failed to reset KDF debug flag");
-        }
-    }
-    catch (const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error resetting KDF debug flag: " + std::string(e.what()));
-    }  
+void NVMLogCollectorMac::clearKDFDebugFlag() {
+    utils.clearKDFDebugFlagsSystem(MacPaths::ACSOCKTOOL);
 }
 void NVMLogCollectorMac::createSWGConfigOverride() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try
-    {
-        string UMBRELLA_PATH = "/opt/cisco/secureclient/umbrella/";
-        string CONFIG_OVERRIDE_FILE = UMBRELLA_PATH + "SWGConfigOverride.json";
-
-        // Check if directory exists, create if it doesn't
-        if (!fs::exists(UMBRELLA_PATH)) {
-            try {
-                fs::create_directories(UMBRELLA_PATH);
-                logger->info("[+] Created Umbrella directory at: " + UMBRELLA_PATH);
-            } catch (const fs::filesystem_error& e) {
-                logger->error("[!] Error creating directory: " + string(e.what()));
-                return;
-            }
-        }
-        // Create or overwrite the SWGConfigOverride.json file
-        ofstream configFile(CONFIG_OVERRIDE_FILE, ios::trunc);
-        if (configFile) {
-            // Format the JSON with proper indentation
-            configFile << "{\n"
-                    << "\t\"organisationId\": \"2598416\",\n"
-                    << "\t\"fingerprint\": \"2ed3f2d2a8a6d5f4441ee349f7315a9a\",\n"
-                    << "\t\"UserId\": \"10789072\"\n"
-                    << "}" << endl;
-            
-            configFile.close();
-            logger->info("[+] Successfully created " + CONFIG_OVERRIDE_FILE);
-        } else {
-            logger->error("[!] Failed to write to " + CONFIG_OVERRIDE_FILE);
-            logger->error("[!] Make sure you're running with sudo privileges.");
-        }
-        
-        logger->info("[+] SWG Config Override setup completed successfully");
-    }
-    catch (const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error creating SWGConfigOverride.json: " + std::string(e.what()));
-    }
+    utils.createSWGConfigOverrideSystem(MacPaths::UMBRELLA_PATH);
 }
 void NVMLogCollectorMac::deleteSWGConfigOverride() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    string UMBRELLA_PATH = "/opt/cisco/secureclient/umbrella/";
-    string CONFIG_OVERRIDE_FILE = UMBRELLA_PATH + "SWGConfigOverride.json";
-
-    // Check if file exists before attempting to delete
-    if (fs::exists(CONFIG_OVERRIDE_FILE)) {
-        try {
-            // Remove the file
-            fs::remove(CONFIG_OVERRIDE_FILE);
-            logger->info("[+] Successfully deleted " + CONFIG_OVERRIDE_FILE);
-            logger->info("[*] Restarting Cisco Umbrella service...");
-            
-            // First, find and kill the Umbrella process
-            string killCmd = "sudo pkill -f 'acumbrellaagent'";
-            int killResult = system(killCmd.c_str());
-            
-            if (killResult == 0) {
-                logger->info("[+] Successfully stopped Umbrella agent");
-            } else {
-                logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
-            }
-
-            // Give the system a moment to clean up
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-
-            // Start the Umbrella agent again
-            string startCmd = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
-            int startResult = system(startCmd.c_str());
-            
-            if (startResult == 0) {
-                logger->info("[+] Successfully restarted Umbrella agent");
-            } else {
-                logger->error("[!] Failed to restart Umbrella agent");
-            }
-
-        } 
-        catch (const LogCollectorError& e) {
-            logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-            logger->error("Details: " + std::string(e.what()));
-        } catch (const fs::filesystem_error& e) {
-            logger->error("[!] Error deleting file: " + string(e.what()));
-            logger->error("[!] Make sure you have proper permissions");
-        }
-    } else {
-        logger->warning("[!] SWGConfigOverride.json file not found at: " + CONFIG_OVERRIDE_FILE);
-    }
+    utils.deleteSWGConfigOverrideSystem(MacPaths::UMBRELLA_PATH);
 }
 void NVMLogCollectorMac::findNVMAgentProcesses() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Searching for NVM agent processes...");
         logger->info("Searching for NVM agent processes...");
@@ -542,6 +176,14 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate process with PID: " + pid);
             }
+            // std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
+            // int startResult = system(startCmd.c_str());
+            
+            // if (startResult == 0) {
+            //     logger->info("[+] Successfully started NVM agent");
+            // } else {
+            //     logger->error("[!] Failed to start NVM agent");
+            // }
         } else {
             logger->warning("No NVM agent PID found");
         }
@@ -606,48 +248,17 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate Umbrella process with PID: " + umbrellaPid);
             }
+            // std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+            // int startResult1 = system(startCmd1.c_str());
+
+            // if (startResult1 == 0) {
+            //     logger->info("[+] Successfully started Umbrella agent");
+            // } else {
+            //     logger->error("[!] Failed to start Umbrella agent");
+            // }
         } else {
             logger->warning("No Umbrella agent PID found");
         }
-        // std::string killCmd = "sudo pkill -f 'acnvmagent'";
-        // int killResult = system(killCmd.c_str());
-        
-        // if (killResult == 0) {
-        //     logger->info("[+] Successfully stopped NVM agent");
-        // } else {
-        //     logger->warning("[!] NVM agent was not running or couldn't be stopped");
-        // }
-        // std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
-        // int startResult = system(startCmd.c_str());
-        
-        // if (startResult == 0) {
-        //     logger->info("[+] Successfully started NVM agent");
-        // } else {
-        //     logger->error("[!] Failed to start NVM agent");
-        // }
-        // std::string killCmd1 = "sudo pkill -f 'acumbrellaagent'";
-        // int killResult1 = system(killCmd1.c_str());
-
-        // if (killResult1 == 0) {
-        //     logger->info("[+] Successfully stopped Umbrella agent");
-        // } else {
-        //     logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
-        // }
-
-        // // Start Umbrella agent
-        // std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
-        // int startResult1 = system(startCmd1.c_str());
-
-        // if (startResult1 == 0) {
-        //     logger->info("[+] Successfully started Umbrella agent");
-        // } else {
-        //     logger->error("[!] Failed to start Umbrella agent");
-        // }
-        // for (int i = 30; i > 0; i--) {
-        //     std::cout << "\r\033[K" << "Starting in " << i << " seconds..." << std::flush;
-        //     std::this_thread::sleep_for(std::chrono::seconds(1));
-        // }
-        // std::cout << "\r\033[K" << "Starting log collection..." << std::endl;
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
@@ -658,7 +269,6 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
     }
 }
 void NVMLogCollectorMac::backupServiceProfile() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Creating backup of NVM_ServiceProfile.xml...");
         
@@ -681,7 +291,6 @@ void NVMLogCollectorMac::backupServiceProfile() {
     }
 }
 void NVMLogCollectorMac::restoreServiceProfile() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Restoring NVM_ServiceProfile.xml from backup...");
     
@@ -694,6 +303,15 @@ void NVMLogCollectorMac::restoreServiceProfile() {
         } else {
             logger->error("Failed to restore from backup, error code: " + std::to_string(result));
         }
+        std::string cmd1 = "sudo rm /opt/cisco/secureclient/NVM/NVM_ServiceProfile.xml.bak";
+
+        int result1 = system(cmd1.c_str());
+        
+        if (result1 == 0) {
+            logger->info("Successfully removed backup file: " + cmd1);
+        } else {
+            logger->error("Failed to remove backup file. Error code: " + std::to_string(result1));
+        }
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
@@ -704,7 +322,6 @@ void NVMLogCollectorMac::restoreServiceProfile() {
     }
 }
 void NVMLogCollectorMac::collectAllLogsSimultaneously() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Starting all log collections simultaneously...");
         logger->info("Press Ctrl+C to stop all collections when ready");
@@ -805,7 +422,6 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
     }
 }
 void NVMLogCollectorMac::collectDARTLogs() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Starting DART log collection...");
     
@@ -839,64 +455,7 @@ void NVMLogCollectorMac::collectDARTLogs() {
         logger->error("Error collecting logs: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorMac::removeDebugConf() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        logger->info("Removing NVM debug configuration file...");
-    
-        std::string cmd = "sudo rm /opt/cisco/secureclient/NVM/nvm_dbg.conf";
-        
-        int result = system(cmd.c_str());
-        
-        if (result == 0) {
-            logger->info("Successfully removed nvm_dbg.conf");
-        } else {
-            logger->error("Failed to remove nvm_dbg.conf. Error code: " + std::to_string(result));
-        }
-    }
-    catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error collecting logs: " + std::string(e.what()));
-    }
-}
-void NVMLogCollectorMac::clearKDFDebugFlag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        logger->info("Clearing KDF debug flag...");
-    
-        std::string SYSTEM_KDF_PATH = "/opt/cisco/secureclient/kdf/";
-        std::string KDF_BIN_PATH = SYSTEM_KDF_PATH + "bin/";
-        std::string acsocktoolPath = KDF_BIN_PATH + "acsocktool";
-        
-        // Check if acsocktool exists
-        if (!fs::exists(acsocktoolPath)) {
-            logger->error("acsocktool not found at: " + acsocktoolPath);
-            return;
-        }
-        
-        // Construct and execute command
-        std::string cmd = "sudo " + acsocktoolPath + " -cdf";
-        int result = system(cmd.c_str());
-        
-        if (result == 0) {
-            logger->info("KDF debug flag cleared successfully");
-        } else {
-            logger->error("Failed to clear KDF debug flag. Error code: " + std::to_string(result));
-        }
-    }
-    catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error clearing KDF debug flag: " + std::string(e.what()));
-    }
-}
 void NVMLogCollectorMac::collectLogsWithTimer() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         // Set up signal handler
         signal(SIGINT, signalHandler);
@@ -933,7 +492,6 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
     return size * nmemb;
 }
 void NVMLogCollectorMac::LogCollectorFile(){
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         std::string buildPath = fs::current_path().string();
         std::string logCollectorPath = buildPath + "/logcollector.log"; 
@@ -954,7 +512,6 @@ void NVMLogCollectorMac::LogCollectorFile(){
     }
 }
 void NVMLogCollectorMac::organizeAndArchiveLogs() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Organizing and archiving collected logs...");
         
