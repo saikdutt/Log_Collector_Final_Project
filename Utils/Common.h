@@ -26,6 +26,7 @@ public:
     void removeDebugConfSystem(const std::string& PATH);
     void createSWGConfigOverrideSystem(const std::string& PATH);
     void deleteSWGConfigOverrideSystem(const std::string& PATH);
+    void collectLogsWithTimer();
 private:
     std::shared_ptr<Logger> logger;
 };

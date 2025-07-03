@@ -30,12 +30,10 @@ using namespace std;
 
 // Constructor implementation
 NVMLogCollectorMac::NVMLogCollectorMac(const std::map<std::string, std::string>& config, 
-    std::shared_ptr<Logger> logger,
-    bool enable_debug_logs,
-    int debug_level)
+    std::shared_ptr<Logger> logger)
     :BaseCollector(config, logger),
-    NVMLogCollector(config, logger, enable_debug_logs, debug_level),
-    SWGLogCollector(config, logger, enable_debug_logs, debug_level),
+    NVMLogCollector(config, logger),
+    SWGLogCollector(config, logger),
     utils(logger) {
 
     logger->info("NVMCollectorMac initialized with NVM and SWG support.");
@@ -176,14 +174,14 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate process with PID: " + pid);
             }
-            // std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
-            // int startResult = system(startCmd.c_str());
+            std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
+            int startResult = system(startCmd.c_str());
             
-            // if (startResult == 0) {
-            //     logger->info("[+] Successfully started NVM agent");
-            // } else {
-            //     logger->error("[!] Failed to start NVM agent");
-            // }
+            if (startResult == 0) {
+                logger->info("[+] Successfully started NVM agent");
+            } else {
+                logger->error("[!] Failed to start NVM agent");
+            }
         } else {
             logger->warning("No NVM agent PID found");
         }
@@ -248,14 +246,14 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate Umbrella process with PID: " + umbrellaPid);
             }
-            // std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
-            // int startResult1 = system(startCmd1.c_str());
+            std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+            int startResult1 = system(startCmd1.c_str());
 
-            // if (startResult1 == 0) {
-            //     logger->info("[+] Successfully started Umbrella agent");
-            // } else {
-            //     logger->error("[!] Failed to start Umbrella agent");
-            // }
+            if (startResult1 == 0) {
+                logger->info("[+] Successfully started Umbrella agent");
+            } else {
+                logger->error("[!] Failed to start Umbrella agent");
+            }
         } else {
             logger->warning("No Umbrella agent PID found");
         }
@@ -373,15 +371,13 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
                 logger->error("[!] Failed to start " + description + " collection");
             }
         }
-        collectLogsWithTimer();
+        utils.collectLogsWithTimer();
         // When Ctrl+C is pressed, stop all collections
         logger->info("\nStopping all log collections...");
         
         // Kill all collection processes
         std::vector<std::pair<std::string, std::string>> killCommands = {
             {"sudo pkill -f 'log stream.*com.cisco.anyconnect.macos.acsockext' || true", "KDF Logs"},
-            {"sudo pkill -f 'acnvmagent' || true", "NVM System Logs"},
-            {"sudo pkill -f 'acumbrellaagent' || true", "Umbrella/SWG Logs"},
             {"sudo killall tcpdump || true", "Packet Capture"},
         };
 
@@ -396,22 +392,6 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
             }
         }
         logger->info("Logs have been saved to the Desktop");
-        std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
-        int startResult = system(startCmd.c_str());
-        
-        if (startResult == 0) {
-            logger->info("[+] Successfully started NVM agent");
-        } else {
-            logger->error("[!] Failed to start NVM agent");
-        }
-        std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
-        int startResult1 = system(startCmd1.c_str());
-
-        if (startResult1 == 0) {
-            logger->info("[+] Successfully started Umbrella agent");
-        } else {
-            logger->error("[!] Failed to start Umbrella agent");
-        }
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
@@ -454,42 +434,6 @@ void NVMLogCollectorMac::collectDARTLogs() {
     catch (const std::exception& e) {
         logger->error("Error collecting logs: " + std::string(e.what()));
     }
-}
-void NVMLogCollectorMac::collectLogsWithTimer() {
-    try{
-        // Set up signal handler
-        signal(SIGINT, signalHandler);
-        g_stopCollection = false;
-        
-        // Start time
-        auto startTime = std::chrono::steady_clock::now();
-        int elapsedSeconds = 0;
-        
-        while (!g_stopCollection) {
-            auto currentTime = std::chrono::steady_clock::now();
-            elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>
-                            (currentTime - startTime).count();
-            
-            // Show elapsed time
-            std::cout << "\r\033[K" << "Time elapsed: " 
-                    << std::setfill('0') << std::setw(2) << elapsedSeconds/60 << ":"
-                    << std::setfill('0') << std::setw(2) << elapsedSeconds%60 
-                    << " (Press Ctrl+C to stop)" << std::flush;
-            
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }
-    catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error collecting logs with timer: " + std::string(e.what()));
-    }
-}
-static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
-    ((std::string*)userp)->append((char*)contents, size * nmemb);
-    return size * nmemb;
 }
 void NVMLogCollectorMac::LogCollectorFile(){
     try{

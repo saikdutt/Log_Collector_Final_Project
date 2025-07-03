@@ -45,16 +45,16 @@ int main() {
         collector.setKDFDebugFlag();
         collector.createSWGConfigOverride();
         collector.findNVMAgentProcesses();
-        // collector.collectAllLogsSimultaneously();
-        // logger->info("All logs collected successfully");
-        // collector.collectDARTLogs();
-        // logger->info("DART logs collected successfully");
+        collector.collectAllLogsSimultaneously();
+        logger->info("All logs collected successfully");
+        collector.collectDARTLogs();
+        logger->info("DART logs collected successfully");
         collector.removeDebugConf();
         collector.clearKDFDebugFlag();
         collector.restoreServiceProfile();
         collector.findNVMAgentProcesses();
         collector.deleteSWGConfigOverride();
-        //collector.organizeAndArchiveLogs();
+        collector.organizeAndArchiveLogs();
     }
     catch(const std::exception& e)
     {

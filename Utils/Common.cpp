@@ -36,7 +36,6 @@ void signalHandler(int signum) {
     }
 }   
 void CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         string pattern;
         logger->info("\nSelect pattern for <TroubleShoot> tag:");
@@ -146,8 +145,6 @@ void CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
     }
 }
 void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue) {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    
     try {
         // Remove "0x" prefix if present
         std::string hexValueCopy = hexValue; // Create a copy since hexValue is const
@@ -180,7 +177,6 @@ void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::stri
     }
 }
 void CommonUtils::clearKDFDebugFlagsSystem(const std::string& PATH) {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Clearing KDF debug flag...");
         
@@ -210,7 +206,6 @@ void CommonUtils::clearKDFDebugFlagsSystem(const std::string& PATH) {
     }
 }
 void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try
     {
         logger->info("Enter the debug value");
@@ -236,7 +231,6 @@ void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
     }
 }
 void CommonUtils::removeDebugConfSystem(const std::string& PATH) {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Removing NVM debug configuration file...");
 
@@ -258,8 +252,43 @@ void CommonUtils::removeDebugConfSystem(const std::string& PATH) {
         logger->error("Error collecting logs: " + std::string(e.what()));
     }
 }
+void CommonUtils::collectLogsWithTimer() {
+    try{
+        // Set up signal handler
+        signal(SIGINT, signalHandler);
+        g_stopCollection = false;
+        
+        // Start time
+        auto startTime = std::chrono::steady_clock::now();
+        int elapsedSeconds = 0;
+        
+        while (!g_stopCollection) {
+            auto currentTime = std::chrono::steady_clock::now();
+            elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>
+                            (currentTime - startTime).count();
+            
+            // Show elapsed time
+            std::cout << "\r\033[K" << "Time elapsed: " 
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds/60 << ":"
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds%60 
+                    << " (Press Ctrl+C to stop)" << std::flush;
+            
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+    catch(const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting logs with timer: " + std::string(e.what()));
+    }
+}
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
 void CommonUtils::createSWGConfigOverrideSystem(const std::string& PATH) {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try
     {
         string CONFIG_OVERRIDE_FILE = PATH + "SWGConfigOverride.json";
@@ -302,7 +331,6 @@ void CommonUtils::createSWGConfigOverrideSystem(const std::string& PATH) {
     }
 }
 void CommonUtils::deleteSWGConfigOverrideSystem(const std::string& PATH) {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     string CONFIG_OVERRIDE_FILE = PATH + "SWGConfigOverride.json";
 
     // Check if file exists before attempting to delete
