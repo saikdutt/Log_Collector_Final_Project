@@ -6,9 +6,7 @@
 class NVMLogCollectorLinux : public virtual NVMLogCollector, public virtual SWGLogCollector {
 public:
     NVMLogCollectorLinux(const std::map<std::string, std::string>& config, 
-                      std::shared_ptr<Logger> logger,
-                      bool enable_debug_logs = false,
-                      int debug_level = 0);
+                      std::shared_ptr<Logger> logger);
     ~NVMLogCollectorLinux();
     void get_nvm_version();
     std::string get_nvm_version_string();

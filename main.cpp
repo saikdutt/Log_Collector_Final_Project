@@ -38,10 +38,6 @@ int main() {
     {
         // Get NVM version
         collector.get_nvm_version();
-        logger->info("NVM version: " + collector.get_nvm_version_string());
-        collector.findpath();
-        logger->info("Path successfully found in the system");
-        collector.initializePaths();
         collector.writeDebugConf();
         collector.backupServiceProfile();
         collector.addTroubleshootTag();

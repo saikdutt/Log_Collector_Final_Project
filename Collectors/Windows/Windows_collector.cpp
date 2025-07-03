@@ -40,12 +40,10 @@ using namespace std;
 #endif
 // Constructor implementation
 NVMLogCollectorWindows::NVMLogCollectorWindows(const std::map<std::string, std::string>& config, 
-    std::shared_ptr<Logger> logger,
-    bool enable_debug_logs,
-    int debug_level)
+    std::shared_ptr<Logger> logger)
     :BaseCollector(config, logger),
-    NVMLogCollector(config, logger, enable_debug_logs, debug_level),
-    SWGLogCollector(config, logger, enable_debug_logs, debug_level){
+    NVMLogCollector(config, logger),
+    SWGLogCollector(config, logger){
 
     logger->info("NVMCollectorWindows initialized with NVM and SWG support.");
 }

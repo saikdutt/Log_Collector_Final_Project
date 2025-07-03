@@ -25,17 +25,9 @@
 // Using std::filesystem directly instead of namespace alias
 NVMLogCollector::NVMLogCollector(
     const std::map<std::string, std::string>& config, 
-    std::shared_ptr<Logger> logger,
-    bool enable_debug_logs,
-    int debug_level,
-    const std::string& nvm_version)
+    std::shared_ptr<Logger> logger)
     : BaseCollector(config, logger),
-      enable_debug_logs(enable_debug_logs),
-      debug_level(debug_level),
-      kdf_flags_set(false),
-      packet_capture_enabled(false),
-      enable_kdf_logging(false),
-      nvm_version(nvm_version) {
-    
+      nvm_version("5.1") {
+
     logger->debug("NVMLogCollector initialized");
 }
