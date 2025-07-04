@@ -113,71 +113,64 @@ void NVMLogCollectorMac::deleteSWGConfigOverride() {
 }
 void NVMLogCollectorMac::findNVMAgentProcesses() {
     try{
+        // NVM Agent Section
         logger->info("Searching for NVM agent processes...");
-        logger->info("Searching for NVM agent processes...");
-        
-        // Command to find NVM agent processes
-        std::string cmd1 = "ps -ef | grep acnvmagent";
-        
-        int result1 = system(cmd1.c_str());
-        
-        if (result1 == 0) {
+        std::string nvmCmd1 = "ps -ef | grep acnvmagent";
+        int nvmResult1 = system(nvmCmd1.c_str());
+
+        if (nvmResult1 == 0) {
             logger->info("NVM agent processes found and displayed");
         } else {
-            logger->warning("Command execution returned non-zero status: " + std::to_string(result1));
+            logger->warning("Command execution returned non-zero status: " + std::to_string(nvmResult1));
         }
-        
-        // Create a pipe to capture command output
-        std::array<char, 128> buffer;
-        std::string result;
-        std::string cmd = "ps -ef | grep acnvmagent";
-        
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (!pipe) {
+
+        std::array<char, 128> nvmBuffer;
+        std::string nvmResult;
+        std::string nvmCmd = "ps -ef | grep acnvmagent";
+
+        FILE* nvmPipe = popen(nvmCmd.c_str(), "r");
+        if (!nvmPipe) {
             logger->error("Failed to execute process search command");
             return;
         }
-        
-        // Read the command output
-        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-            result += buffer.data();
+
+        while (fgets(nvmBuffer.data(), nvmBuffer.size(), nvmPipe) != nullptr) {
+            nvmResult += nvmBuffer.data();
         }
-        pclose(pipe);
-        
-        // Parse the output to get PID
-        std::istringstream stream(result);
-        std::string line;
-        std::string pid;
-        
-        if (std::getline(stream, line)) {
-            std::istringstream iss(line);
-            std::string column;
-            int columnCount = 0;
+        pclose(nvmPipe);
+
+        std::istringstream nvmStream(nvmResult);
+        std::string nvmLine;
+        std::string nvmPid;
+
+        if (std::getline(nvmStream, nvmLine)) {
+            std::istringstream nvmIss(nvmLine);
+            std::string nvmColumn;
+            int nvmColumnCount = 0;
                 
-            while (iss >> column && columnCount < 2) {
-                if (columnCount == 1) { // Second column
-                    pid = column;
+            while (nvmIss >> nvmColumn && nvmColumnCount < 2) {
+                if (nvmColumnCount == 1) {
+                    nvmPid = nvmColumn;
                     break;
                 }
-                columnCount++;
+                nvmColumnCount++;
             }
         }
-        if (!pid.empty()) {
-            logger->info("Found NVM agent PID: " + pid);
+
+        if (!nvmPid.empty()) {
+            logger->info("Found NVM agent PID: " + nvmPid);
+            std::string nvmKillCmd = "sudo kill -9 " + nvmPid;
+            int nvmKillResult = system(nvmKillCmd.c_str());
             
-            // Use the PID (example: kill the process)
-            std::string killCmd = "sudo kill -9 " + pid;
-            int result = system(killCmd.c_str());
-            
-            if (result == 0) {
+            if (nvmKillResult == 0) {
                 logger->info("Successfully terminated NVM agent process");
             } else {
-                logger->error("Failed to terminate process with PID: " + pid);
+                logger->error("Failed to terminate process with PID: " + nvmPid);
             }
-            std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
-            int startResult = system(startCmd.c_str());
+            std::string nvmStartCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
+            int nvmStartResult = system(nvmStartCmd.c_str());
             
-            if (startResult == 0) {
+            if (nvmStartResult == 0) {
                 logger->info("[+] Successfully started NVM agent");
             } else {
                 logger->error("[!] Failed to start NVM agent");
@@ -185,11 +178,10 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
         } else {
             logger->warning("No NVM agent PID found");
         }
+
+        // Umbrella Agent Section
         logger->info("Searching for Umbrella agent processes...");
-
-        // Command to find Umbrella agent processes
         std::string umbrellaCmd1 = "ps -ef | grep acumbrellaagent";
-
         int umbrellaResult1 = system(umbrellaCmd1.c_str());
 
         if (umbrellaResult1 == 0) {
@@ -198,7 +190,6 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             logger->warning("Command execution returned non-zero status: " + std::to_string(umbrellaResult1));
         }
 
-        // Create a pipe to capture command output
         std::array<char, 128> umbrellaBuffer;
         std::string umbrellaResult;
         std::string umbrellaCmd = "ps -ef | grep acumbrellaagent";
@@ -209,13 +200,11 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             return;
         }
 
-        // Read the command output
         while (fgets(umbrellaBuffer.data(), umbrellaBuffer.size(), umbrellaPipe) != nullptr) {
             umbrellaResult += umbrellaBuffer.data();
         }
         pclose(umbrellaPipe);
 
-        // Parse the output to get PID
         std::istringstream umbrellaStream(umbrellaResult);
         std::string umbrellaLine;
         std::string umbrellaPid;
@@ -226,7 +215,7 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             int umbrellaColumnCount = 0;
                 
             while (umbrellaIss >> umbrellaColumn && umbrellaColumnCount < 2) {
-                if (umbrellaColumnCount == 1) { // Second column
+                if (umbrellaColumnCount == 1) {
                     umbrellaPid = umbrellaColumn;
                     break;
                 }
@@ -236,8 +225,6 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
 
         if (!umbrellaPid.empty()) {
             logger->info("Found Umbrella agent PID: " + umbrellaPid);
-            
-            // Use the PID to kill the process
             std::string umbrellaKillCmd = "sudo kill -9 " + umbrellaPid;
             int umbrellaKillResult = system(umbrellaKillCmd.c_str());
             
@@ -246,16 +233,148 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate Umbrella process with PID: " + umbrellaPid);
             }
-            std::string startCmd1 = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
-            int startResult1 = system(startCmd1.c_str());
+            std::string umbrellaStartCmd = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+            int umbrellaStartResult = system(umbrellaStartCmd.c_str());
 
-            if (startResult1 == 0) {
+            if (umbrellaStartResult == 0) {
                 logger->info("[+] Successfully started Umbrella agent");
             } else {
                 logger->error("[!] Failed to start Umbrella agent");
             }
         } else {
             logger->warning("No Umbrella agent PID found");
+        }
+
+        // ISE Agent Section
+        logger->info("Searching for ISE agent processes...");
+        std::string iseCmd1 = "ps -ef | grep csc_iseagentd";
+        int iseResult1 = system(iseCmd1.c_str());
+
+        if (iseResult1 == 0) {
+            logger->info("ISE agent processes found and displayed");
+        } else {
+            logger->warning("Command execution returned non-zero status: " + std::to_string(iseResult1));
+        }
+
+        std::array<char, 128> iseBuffer;
+        std::string iseResult;
+        std::string iseCmd = "ps -ef | grep csc_iseagentd";
+
+        FILE* isePipe = popen(iseCmd.c_str(), "r");
+        if (!isePipe) {
+            logger->error("Failed to execute ISE process search command");
+            return;
+        }
+
+        while (fgets(iseBuffer.data(), iseBuffer.size(), isePipe) != nullptr) {
+            iseResult += iseBuffer.data();
+        }
+        pclose(isePipe);
+
+        std::istringstream iseStream(iseResult);
+        std::string iseLine;
+        std::string isePid;
+
+        if (std::getline(iseStream, iseLine)) {
+            std::istringstream iseIss(iseLine);
+            std::string iseColumn;
+            int iseColumnCount = 0;
+                
+            while (iseIss >> iseColumn && iseColumnCount < 2) {
+                if (iseColumnCount == 1) {
+                    isePid = iseColumn;
+                    break;
+                }
+                iseColumnCount++;
+            }
+        }
+
+        if (!isePid.empty()) {
+            logger->info("Found ISE agent PID: " + isePid);
+            std::string iseKillCmd = "sudo kill -9 " + isePid;
+            int iseKillResult = system(iseKillCmd.c_str());
+            
+            if (iseKillResult == 0) {
+                logger->info("Successfully terminated ISE agent process");
+            } else {
+                logger->error("Failed to terminate ISE process with PID: " + isePid);
+            }
+            std::string iseStartCmd = "sudo /opt/cisco/secureclient/bin/csc_iseagentd &";
+            int iseStartResult = system(iseStartCmd.c_str());
+
+            if (iseStartResult == 0) {
+                logger->info("[+] Successfully started ISE agent");
+            } else {
+                logger->error("[!] Failed to start ISE agent");
+            }
+        } else {
+            logger->warning("No ISE agent PID found");
+        }
+
+        // ZTA Agent Section
+        logger->info("Searching for ZTA agent processes...");
+        std::string ztaCmd1 = "ps -ef | grep csc_ztaagent";
+        int ztaResult1 = system(ztaCmd1.c_str());
+
+        if (ztaResult1 == 0) {
+            logger->info("ZTA agent processes found and displayed");
+        } else {
+            logger->warning("Command execution returned non-zero status: " + std::to_string(ztaResult1));
+        }
+
+        std::array<char, 128> ztaBuffer;
+        std::string ztaResult;
+        std::string ztaCmd = "ps -ef | grep csc_ztaagent";
+
+        FILE* ztaPipe = popen(ztaCmd.c_str(), "r");
+        if (!ztaPipe) {
+            logger->error("Failed to execute ZTA process search command");
+            return;
+        }
+
+        while (fgets(ztaBuffer.data(), ztaBuffer.size(), ztaPipe) != nullptr) {
+            ztaResult += ztaBuffer.data();
+        }
+        pclose(ztaPipe);
+
+        std::istringstream ztaStream(ztaResult);
+        std::string ztaLine;
+        std::string ztaPid;
+
+        if (std::getline(ztaStream, ztaLine)) {
+            std::istringstream ztaIss(ztaLine);
+            std::string ztaColumn;
+            int ztaColumnCount = 0;
+                
+            while (ztaIss >> ztaColumn && ztaColumnCount < 2) {
+                if (ztaColumnCount == 1) {
+                    ztaPid = ztaColumn;
+                    break;
+                }
+                ztaColumnCount++;
+            }
+        }
+
+        if (!ztaPid.empty()) {
+            logger->info("Found ZTA agent PID: " + ztaPid);
+            std::string ztaKillCmd = "sudo kill -9 " + ztaPid;
+            int ztaKillResult = system(ztaKillCmd.c_str());
+            
+            if (ztaKillResult == 0) {
+                logger->info("Successfully terminated ZTA agent process");
+            } else {
+                logger->error("Failed to terminate ZTA process with PID: " + ztaPid);
+            }
+            std::string ztaStartCmd = "sudo /opt/cisco/secureclient/bin/csc_ztaagent &";
+            int ztaStartResult = system(ztaStartCmd.c_str());
+
+            if (ztaStartResult == 0) {
+                logger->info("[+] Successfully started ZTA agent");
+            } else {
+                logger->error("[!] Failed to start ZTA agent");
+            }
+        } else {
+            logger->warning("No ZTA agent PID found");
         }
     }
     catch (const LogCollectorError& e) {

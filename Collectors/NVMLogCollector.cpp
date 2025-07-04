@@ -27,7 +27,7 @@ NVMLogCollector::NVMLogCollector(
     const std::map<std::string, std::string>& config, 
     std::shared_ptr<Logger> logger)
     : BaseCollector(config, logger),
-      nvm_version("5.1") {
+      nvm_version(nvm_version) {
 
     logger->debug("NVMLogCollector initialized");
 }

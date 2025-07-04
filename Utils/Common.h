@@ -40,13 +40,18 @@ namespace MacPaths {
     // Executables
     const std::string NVM_AGENT = NVM_PATH + "bin/acnvmagent.app/Contents/MacOS/acnvmagent";
     const std::string UMBRELLA_AGENT = SECURECLIENT_BASE + "bin/acumbrellaagent";
-    const std::string ACSOCKTOOL = KDF_PATH + "bin/acsocktool";
+    const std::string ACSOCKTOOL = KDF_PATH + "bin/./acsocktool";
     const std::string DART_CLI = "/Applications/Cisco/Cisco\\ Secure\\ Client\\ -\\ DART.app/Contents/Resources/dartcli";
     
     // Config files
     const std::string DEBUG_CONF = NVM_PATH + "nvm_dbg.conf";
     const std::string SERVICE_PROFILE = NVM_PATH + "NVM_ServiceProfile.xml";
     const std::string SWG_CONFIG_OVERRIDE = UMBRELLA_PATH + "SWGConfigOverride.json";
+    //ISE and Secure Firewall Posture paths
+    const std::string ISE_POSTURE_LOG = "~/.cisco/iseposture/log";
+    const std::string SECURE_FIREWALL_POSTURE_OPT = SECURECLIENT_BASE + "securefirewallposture";
+    const std::string SECURE_FIREWALL_POSTURE_HOME = "~/.cisco/secureclient/securefirewallposture";
+    
 }
 
 // Windows paths
