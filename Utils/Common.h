@@ -1,10 +1,6 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <string>
-#include <signal.h>
-#include <atomic>
-#include <memory>
 #include "Logger.h"
 extern std::atomic<bool> g_stopCollection;
 
@@ -36,11 +32,12 @@ namespace MacPaths {
     const std::string NVM_PATH = SECURECLIENT_BASE + "NVM/";
     const std::string KDF_PATH = SECURECLIENT_BASE + "kdf/";
     const std::string UMBRELLA_PATH = SECURECLIENT_BASE + "umbrella/";
+    const std::string ZTA_PATH = SECURECLIENT_BASE + "zta/";
     
     // Executables
     const std::string NVM_AGENT = NVM_PATH + "bin/acnvmagent.app/Contents/MacOS/acnvmagent";
     const std::string UMBRELLA_AGENT = SECURECLIENT_BASE + "bin/acumbrellaagent";
-    const std::string ACSOCKTOOL = KDF_PATH + "bin/./acsocktool";
+    const std::string ACSOCKTOOL = KDF_PATH + "bin/acsocktool";
     const std::string DART_CLI = "/Applications/Cisco/Cisco\\ Secure\\ Client\\ -\\ DART.app/Contents/Resources/dartcli";
     
     // Config files
@@ -51,6 +48,9 @@ namespace MacPaths {
     const std::string ISE_POSTURE_LOG = "~/.cisco/iseposture/log";
     const std::string SECURE_FIREWALL_POSTURE_OPT = SECURECLIENT_BASE + "securefirewallposture";
     const std::string SECURE_FIREWALL_POSTURE_HOME = "~/.cisco/secureclient/securefirewallposture";
+    const std::string NVM_AGENT_BIN = SECURECLIENT_BASE + "NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent";
+    const std::string ISE_AGENT_BIN = SECURECLIENT_BASE + "bin/csc_iseagentd";
+    const std::string ZTA_AGENT_BIN = SECURECLIENT_BASE + "bin/csc_zta_agent";
     
 }
 

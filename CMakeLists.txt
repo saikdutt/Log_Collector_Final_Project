@@ -15,6 +15,8 @@ set(SOURCES
     Collectors/BaseCollector.cpp
     Collectors/NVMLogCollector.cpp
     Collectors/SWGLogCollector.cpp
+    Collectors/ISEPostureCollector.cpp
+    Collectors/ZTALogCollector.cpp
     Collectors/MacOS/Mac_collector.cpp 
     Collectors/Windows/Windows_collector.cpp
     Collectors/Linux/Linux_collector.cpp # Add this line

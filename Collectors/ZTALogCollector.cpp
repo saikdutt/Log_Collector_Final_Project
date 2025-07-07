@@ -1,12 +1,13 @@
-#include "SWGLogCollector.h"
+#include "ZTALogCollector.h"
 #include <filesystem>
+
 
 namespace fs = std::filesystem;
 
-SWGLogCollector::SWGLogCollector(
+ZTACollector::ZTACollector(
     const std::map<std::string, std::string>& config, 
     std::shared_ptr<Logger> logger)
     : BaseCollector(config, logger) {
 
-    logger->debug("SWGLogCollector initialized");
+    logger->debug("ZTACollector initialized");
 }

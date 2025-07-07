@@ -5,24 +5,7 @@ namespace fs = std::filesystem;
 #error "Need C++17 for filesystem support"
 #endif
 #include "Common.h"
-#include <iostream>
-#include <array>
-#include <regex>
-#include <cstdio>
-#include <filesystem>
 #include <thread>
-#include <chrono>
-#include <fstream>
-#include <unistd.h>
-#include <stdexcept>
-#include <string>
-#include <cctype> 
-#include <sstream> 
-#include <atomic>
-#include <signal.h>
-#include <iomanip>
-#include <regex>
-#include <curl/curl.h>
 #include "Error.h"
 using namespace std;
 CommonUtils::CommonUtils(std::shared_ptr<Logger> logger) : logger(logger) {}

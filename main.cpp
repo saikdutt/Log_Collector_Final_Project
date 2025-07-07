@@ -44,6 +44,7 @@ int main() {
         logger->info("Enter the hexadecimal KDF value");
         collector.setKDFDebugFlag();
         collector.createSWGConfigOverride();
+        collector.collectAllFileISE_ZTA();
         collector.findNVMAgentProcesses();
         collector.collectAllLogsSimultaneously();
         logger->info("All logs collected successfully");
@@ -52,8 +53,9 @@ int main() {
         collector.removeDebugConf();
         collector.clearKDFDebugFlag();
         collector.restoreServiceProfile();
-        collector.findNVMAgentProcesses();
+        collector.deleteAllfilesISEPosture_ZTA();
         collector.deleteSWGConfigOverride();
+        collector.findNVMAgentProcesses();
         collector.organizeAndArchiveLogs();
     }
     catch(const std::exception& e)

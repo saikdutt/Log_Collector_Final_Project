@@ -5,22 +5,8 @@ namespace fs = std::filesystem;
 #error "Need C++17 for filesystem support"
 #endif
 #include <iostream>
-#include <fstream>
-#include <filesystem>
-#include <unistd.h>
-#include <array>
-#include <cstdio>
-#include <stdexcept>
-#include <string>
-#include <cctype> 
-#include <sstream> 
-#include <atomic>
-#include <chrono>
 #include <thread>
-#include <signal.h>
-#include <iomanip>
 #include <regex>
-#include <curl/curl.h>
 #include "Mac_collector.h"
 #include "../../Utils/Logger.h"
 #include "../../Utils/Error.h"
@@ -30,10 +16,14 @@ using namespace std;
 
 // Constructor implementation
 NVMLogCollectorMac::NVMLogCollectorMac(const std::map<std::string, std::string>& config, 
-    std::shared_ptr<Logger> logger)
+    std::shared_ptr<Logger> logger,
+    bool enable_debug_logs,
+    int debug_level)
     :BaseCollector(config, logger),
-    NVMLogCollector(config, logger),
+    NVMLogCollector(config, logger, enable_debug_logs, debug_level),
     SWGLogCollector(config, logger),
+    ISEPostureCollector(config, logger),
+    ZTACollector(config, logger),
     utils(logger) {
 
     logger->info("NVMCollectorMac initialized with NVM and SWG support.");
@@ -73,18 +63,15 @@ void NVMLogCollectorMac::get_nvm_version() {
         std::smatch matches;
         if (std::regex_search(result, matches, versionPattern) && matches.size() > 1) {
             nvm_version = matches[1].str();
-            logger->info("NVM agent version found: " + nvm_version);
         } else {
-            logger->warning("Could not parse the NVM version from output : " + result);
+            logger->info("NVM agent version found: " + result);
             nvm_version = "unknown";
         }
-        
     } catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
     } catch (const std::exception& e) {
         logger->error("Error getting NVM version: " + std::string(e.what()));
-        nvm_version = "error";
     }
 }
 void NVMLogCollectorMac::writeDebugConf() {
@@ -167,9 +154,8 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate process with PID: " + nvmPid);
             }
-            std::string nvmStartCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent.app/Contents/MacOS/acnvmagent &";
+            std::string nvmStartCmd = "sudo " + MacPaths::NVM_AGENT_BIN + " &";
             int nvmStartResult = system(nvmStartCmd.c_str());
-            
             if (nvmStartResult == 0) {
                 logger->info("[+] Successfully started NVM agent");
             } else {
@@ -233,9 +219,10 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate Umbrella process with PID: " + umbrellaPid);
             }
-            std::string umbrellaStartCmd = "sudo /opt/cisco/secureclient/bin/acumbrellaagent &";
+            
+            // For Umbrella Agent
+            std::string umbrellaStartCmd = "sudo " + MacPaths::UMBRELLA_AGENT + " &";
             int umbrellaStartResult = system(umbrellaStartCmd.c_str());
-
             if (umbrellaStartResult == 0) {
                 logger->info("[+] Successfully started Umbrella agent");
             } else {
@@ -299,7 +286,8 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate ISE process with PID: " + isePid);
             }
-            std::string iseStartCmd = "sudo /opt/cisco/secureclient/bin/csc_iseagentd &";
+            // For ISE Agent
+            std::string iseStartCmd = "sudo " + MacPaths::ISE_AGENT_BIN + " &";
             int iseStartResult = system(iseStartCmd.c_str());
 
             if (iseStartResult == 0) {
@@ -324,7 +312,7 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
 
         std::array<char, 128> ztaBuffer;
         std::string ztaResult;
-        std::string ztaCmd = "ps -ef | grep csc_ztaagent";
+        std::string ztaCmd = "ps -ef | grep csc_zta_agent";
 
         FILE* ztaPipe = popen(ztaCmd.c_str(), "r");
         if (!ztaPipe) {
@@ -365,7 +353,8 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
             } else {
                 logger->error("Failed to terminate ZTA process with PID: " + ztaPid);
             }
-            std::string ztaStartCmd = "sudo /opt/cisco/secureclient/bin/csc_ztaagent &";
+            // For ZTA Agent
+            std::string ztaStartCmd = "sudo " + MacPaths::ZTA_AGENT_BIN + " &";
             int ztaStartResult = system(ztaStartCmd.c_str());
 
             if (ztaStartResult == 0) {
@@ -386,46 +375,55 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
     }
 }
 void NVMLogCollectorMac::backupServiceProfile() {
-    try{
+    try {
         logger->info("Creating backup of NVM_ServiceProfile.xml...");
-        
-        std::string cmd = "sudo cp /opt/cisco/secureclient/NVM/NVM_ServiceProfile.xml /opt/cisco/secureclient/NVM/NVM_ServiceProfile.xml.bak";
-        
+
+        // MacPaths::SERVICE_PROFILE already includes the filename, so don't append it again
+        std::string cmd = "sudo cp " + MacPaths::SERVICE_PROFILE + " " + 
+                          MacPaths::NVM_PATH + "NVM_ServiceProfile.xml.bak";
+
+        logger->debug("Executing command: " + cmd);
         int result = system(cmd.c_str());
         
         if (result == 0) {
             logger->info("Backup created successfully as NVM_ServiceProfile.xml.bak");
         } else {
             logger->error("Failed to create backup, error code: " + std::to_string(result));
+            logger->error("Make sure you're running with sudo privileges.");
         }
-    }
-    catch(const LogCollectorError& e) {
+    } catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger->error("Error creating backup: " + std::string(e.what()));
     }
 }
 void NVMLogCollectorMac::restoreServiceProfile() {
-    try{
+    try {
         logger->info("Restoring NVM_ServiceProfile.xml from backup...");
-    
-        std::string cmd = "sudo cp /opt/cisco/secureclient/NVM/NVM_ServiceProfile.xml.bak /opt/cisco/secureclient/NVM/NVM_ServiceProfile.xml";
-        
+
+        // Use MacPaths constants for correct path handling
+        std::string cmd = "sudo cp " + MacPaths::NVM_PATH + "NVM_ServiceProfile.xml.bak " +
+                          MacPaths::SERVICE_PROFILE;
+
+        logger->debug("Executing command: " + cmd);
         int result = system(cmd.c_str());
         
         if (result == 0) {
             logger->info("NVM_ServiceProfile.xml restored successfully from backup");
         } else {
             logger->error("Failed to restore from backup, error code: " + std::to_string(result));
+            logger->error("Make sure you're running with sudo privileges.");
         }
-        std::string cmd1 = "sudo rm /opt/cisco/secureclient/NVM/NVM_ServiceProfile.xml.bak";
 
+        // Remove the backup file after successful restoration
+        std::string cmd1 = "sudo rm " + MacPaths::NVM_PATH + "NVM_ServiceProfile.xml.bak";
+        
+        logger->debug("Executing command: " + cmd1);
         int result1 = system(cmd1.c_str());
         
         if (result1 == 0) {
-            logger->info("Successfully removed backup file: " + cmd1);
+            logger->info("Successfully removed backup file");
         } else {
             logger->error("Failed to remove backup file. Error code: " + std::to_string(result1));
         }
@@ -438,6 +436,7 @@ void NVMLogCollectorMac::restoreServiceProfile() {
         logger->error("Error restoring service profile: " + std::string(e.what()));
     }
 }
+
 void NVMLogCollectorMac::collectAllLogsSimultaneously() {
     try{
         logger->info("Starting all log collections simultaneously...");
@@ -454,6 +453,8 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
         std::string nvmLogsPath = std::string(homeDir) + "/Desktop/nvm_system_logs.log";
         std::string umbrellaLogsPath = std::string(homeDir) + "/Desktop/swg_umbrella_logs.log";
         std::string packetCapturePath = std::string(homeDir) + "/Desktop/PacketCapture.pcap";
+        std::string isePostureLogsPath = std::string(homeDir) + "/Desktop/ise_posture_logs.log";
+        std::string ztaLogsPath = std::string(homeDir) + "/Desktop/zta_logs.log";
 
         // Construct commands for different log collections
         // Create a vector of pairs containing both command and description
@@ -476,6 +477,16 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
                 "sudo log stream --predicate 'process == \"acumbrellaagent\"' --style syslog > " + 
                 umbrellaLogsPath + " &",
                 "Umbrella/SWG Logs"
+            },
+            {
+                "sudo log stream --predicate 'process == \"csc_iseagentd\"' --style syslog > " + 
+                isePostureLogsPath + " &",
+                "ISE Posture Logs"
+            },
+            {
+                "sudo log stream --predicate 'process == \"csc_zta_agent\"' --style syslog > " + 
+                ztaLogsPath + " &",
+                "ZTA Logs"
             }
         };
 
@@ -498,6 +509,8 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
         std::vector<std::pair<std::string, std::string>> killCommands = {
             {"sudo pkill -f 'log stream.*com.cisco.anyconnect.macos.acsockext' || true", "KDF Logs"},
             {"sudo killall tcpdump || true", "Packet Capture"},
+            {"sudo pkill -f 'log stream.*csc_iseagentd' || true", "ISE Posture Logs"},
+            {"sudo pkill -f 'log stream.*csc_zta_agent' || true", "ZTA Logs"}
         };
 
         // Stop each process with descriptive logging
@@ -534,8 +547,7 @@ void NVMLogCollectorMac::collectDARTLogs() {
         std::string desktopPath = std::string(homeDir) + "/Desktop/DART_Bundle.zip";
         
         // Construct the DART CLI command with proper escaping
-        std::string cmd = "sudo /Applications/Cisco/Cisco\\ Secure\\ Client\\ -\\ DART.app/Contents/Resources/dartcli "
-                        "-dst " + desktopPath + " -syslogs";
+        std::string cmd = "sudo " + MacPaths::DART_CLI + " -dst " + desktopPath + " -syslogs";
         
         logger->info("Dart log are Collecting...");
         int result = system(cmd.c_str());
@@ -615,6 +627,8 @@ void NVMLogCollectorMac::organizeAndArchiveLogs() {
                             desktopPath + "/PacketCapture.pcap " +
                             desktopPath + "/DART_Bundle.zip " +
                             desktopPath + "/swg_umbrella_logs.log " +
+                            desktopPath + "/ise_posture_logs.log " +
+                            desktopPath + "/zta_logs.log " +
                             nvmLogsDir + "/ 2>/dev/null";
         
         system(moveCmd.c_str());
@@ -648,5 +662,226 @@ void NVMLogCollectorMac::organizeAndArchiveLogs() {
     }
     catch (const std::exception& e) {
         logger->error("Error organizing and archiving logs: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorMac::collectAllFileISE_ZTA() {
+    try {
+        // For ISE debuglogs.json
+        logger->info("Creating empty debuglogs.json file...");
+
+        const char* homeDir1 = getenv("HOME");
+        if (!homeDir1) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+        std::string isePath = MacPaths::ISE_POSTURE_LOG;
+        if (isePath[0] == '~') {
+            isePath = std::string(homeDir1) + isePath.substr(1);
+        }
+
+        std::string mkdirCmd1 = "mkdir -p " + isePath;
+        if (system(mkdirCmd1.c_str()) != 0) {
+            logger->error("Failed to create directory structure");
+            return;
+        }
+
+        std::string jsonPath1 = isePath + "/debuglogs.json";
+        std::ofstream jsonFile1(jsonPath1);
+
+        if (jsonFile1.is_open()) {
+            jsonFile1.close();
+            logger->info("Successfully created empty debuglogs.json at: " + jsonPath1);
+        } else {
+            logger->error("Failed to create debuglogs.json at: " + jsonPath1);
+        }
+
+        // For opt firewall v4debug.json
+        logger->info("Creating empty v4debug.json in secure firewall posture path...");
+
+        std::string firewallPath1 = MacPaths::SECURE_FIREWALL_POSTURE_OPT;
+
+        std::string mkdirCmd2 = "sudo mkdir -p " + firewallPath1;
+        if (system(mkdirCmd2.c_str()) != 0) {
+            logger->error("Failed to create directory structure: " + firewallPath1);
+            return;
+        }
+
+        std::string jsonPath2 = firewallPath1 + "/v4debug.json";
+        std::string touchCmd = "sudo touch " + jsonPath2;
+
+        if (system(touchCmd.c_str()) == 0) {
+            std::string chmodCmd = "sudo chmod 666 " + jsonPath2;
+            system(chmodCmd.c_str());
+            logger->info("Successfully created empty v4debug.json at: " + jsonPath2);
+        } else {
+            logger->error("Failed to create v4debug.json at: " + jsonPath2);
+        }
+
+        // For home firewall v4debug.json
+        logger->info("Creating empty v4debug.json in home secure firewall posture path...");
+        std::string firewallPath2 = MacPaths::SECURE_FIREWALL_POSTURE_HOME;
+        if (firewallPath2[0] == '~') {
+            firewallPath2 = std::string(homeDir1) + firewallPath2.substr(1);
+        }
+
+        std::string mkdirCmd3 = "mkdir -p " + firewallPath2;
+        if (system(mkdirCmd3.c_str()) != 0) {
+            logger->error("Failed to create directory structure: " + firewallPath2);
+            return;
+        }
+
+        std::string jsonPath3 = firewallPath2 + "/v4debug.json";
+        std::ofstream jsonFile2(jsonPath3);
+
+        if (jsonFile2.is_open()) {
+            jsonFile2.close();
+            logger->info("Successfully created empty v4debug.json at: " + jsonPath3);
+        } else {
+            logger->error("Failed to create v4debug.json at: " + jsonPath3);
+        }
+        logger->info("Creating logconfig.json in ZTA path...");
+        
+        std::string ztaPath4 = MacPaths::ZTA_PATH;
+                
+        std::string mkdirCmd4 = "sudo mkdir -p " + ztaPath4;
+        if (system(mkdirCmd4.c_str()) != 0) {
+            logger->error("Failed to create directory structure: " + ztaPath4);
+            return;
+        }
+                
+        std::string jsonPath4 = ztaPath4 + "logconfig.json";
+        std::string touchCmd4 = "sudo touch " + jsonPath4;
+                
+        if (system(touchCmd4.c_str()) == 0) {
+            std::string chmodCmd4 = "sudo chmod 666 " + jsonPath4;
+            system(chmodCmd4.c_str());
+                    
+            std::ofstream jsonFile4(jsonPath4);
+            if (jsonFile4.is_open()) {
+                jsonFile4 << "{\n    \"global\": \"DBG_TRACE\"\n}" << std::endl;
+                jsonFile4.close();
+                logger->info("Successfully created logconfig.json at: " + jsonPath4);
+            } else {
+                logger->error("Failed to write to logconfig.json at: " + jsonPath4);
+            }
+        } else {
+            logger->error("Failed to create logconfig.json at: " + jsonPath4);
+        }
+        logger->info("Creating flags.json in ZTA path...");
+
+        std::string ztaPath5 = MacPaths::ZTA_PATH;
+                
+        std::string mkdirCmd5 = "sudo mkdir -p " + ztaPath5;
+        if (system(mkdirCmd5.c_str()) != 0) {
+            logger->error("Failed to create directory structure: " + ztaPath5);
+            return;
+        }
+                
+        std::string jsonPath5 = ztaPath5 + "flags.json";
+        std::string touchCmd5 = "sudo touch " + jsonPath5;
+                
+        if (system(touchCmd5.c_str()) == 0) {
+            std::string chmodCmd5 = "sudo chmod 666 " + jsonPath5;
+            system(chmodCmd5.c_str());
+                    
+            std::ofstream jsonFile5(jsonPath5);
+            if (jsonFile5.is_open()) {
+                jsonFile5 << "{\n"
+                        << "    \"datapath\": {\n"
+                        << "        \"quic\": {\n"
+                        << "            \"enabled\": false,\n"
+                        << "            \"unreliable_datagram\": true,\n"
+                        << "            \"fallback_http2\": true,\n"
+                        << "            \"max_datagram_size\": 1350\n"
+                        << "        }\n"
+                        << "    },\n"
+                        << "    \"flow_log\": {\"max_count\": 35000},\n"
+                        << "    \"enrollment\": {\n"
+                        << "        \"acme\": {\n"
+                        << "            \"cert_renewal_interval_seconds\": 86400\n"
+                        << "        }\n"
+                        << "    }\n"
+                        << "}" << std::endl;
+                jsonFile5.close();
+                logger->info("Successfully created flags.json at: " + jsonPath5);
+            } else {
+                logger->error("Failed to write to flags.json at: " + jsonPath5);
+            }
+        } else {
+            logger->error("Failed to create flags.json at: " + jsonPath5);
+        }
+    }
+    catch (const std::exception& e) {
+        logger->error("Error creating debuglogs.json: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorMac::deleteAllfilesISEPosture_ZTA() {
+    try {
+        logger->info("Removing all debug configuration files...");
+
+        // Get home directory
+        const char* homeDir6 = getenv("HOME");
+        if (!homeDir6) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+
+        // For ISE debuglogs.json
+        std::string isePath6 = MacPaths::ISE_POSTURE_LOG;
+        if (isePath6[0] == '~') {
+            isePath6 = std::string(homeDir6) + isePath6.substr(1);
+        }
+        std::string iseJsonPath6 = isePath6 + "/debuglogs.json";
+        std::string rmCmd1 = "rm -f " + iseJsonPath6;
+        if (system(rmCmd1.c_str()) == 0) {
+            logger->info("Successfully removed debuglogs.json");
+        } else {
+            logger->error("Failed to remove debuglogs.json");
+        }
+
+        // For opt firewall v4debug.json
+        std::string firewallPath6 = MacPaths::SECURE_FIREWALL_POSTURE_OPT;
+        std::string optJsonPath6 = firewallPath6 + "/v4debug.json";
+        std::string rmCmd2 = "sudo rm -f " + optJsonPath6;
+        if (system(rmCmd2.c_str()) == 0) {
+            logger->info("Successfully removed opt v4debug.json");
+        } else {
+            logger->error("Failed to remove opt v4debug.json");
+        }
+
+        // For home firewall v4debug.json
+        std::string firewallPath7 = MacPaths::SECURE_FIREWALL_POSTURE_HOME;
+        if (firewallPath7[0] == '~') {
+            firewallPath7 = std::string(homeDir6) + firewallPath7.substr(1);
+        }
+        std::string homeJsonPath6 = firewallPath7 + "/v4debug.json";
+        std::string rmCmd3 = "rm -f " + homeJsonPath6;
+        if (system(rmCmd3.c_str()) == 0) {
+            logger->info("Successfully removed home v4debug.json");
+        } else {
+            logger->error("Failed to remove home v4debug.json");
+        }
+
+        // For ZTA logconfig.json
+        std::string ztaPath6 = MacPaths::ZTA_PATH;
+        std::string logconfigPath6 = ztaPath6 + "logconfig.json";
+        std::string rmCmd4 = "sudo rm -f " + logconfigPath6;
+        if (system(rmCmd4.c_str()) == 0) {
+            logger->info("Successfully removed logconfig.json");
+        } else {
+            logger->error("Failed to remove logconfig.json");
+        }
+
+        // For ZTA flags.json
+        std::string flagsPath6 = ztaPath6 + "flags.json";
+        std::string rmCmd5 = "sudo rm -f " + flagsPath6;
+        if (system(rmCmd5.c_str()) == 0) {
+            logger->info("Successfully removed flags.json");
+        } else {
+            logger->error("Failed to remove flags.json");
+        }
+
+    } catch (const std::exception& e) {
+        logger->error("Error deleting debug files: " + std::string(e.what()));
     }
 }

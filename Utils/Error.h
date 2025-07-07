@@ -1,8 +1,6 @@
 #ifndef ERROR_H
 #define ERROR_H
-
 #include <string>
-#include <stdexcept>
 
 class LogCollectorError : public std::runtime_error {
 public:
