@@ -27,7 +27,7 @@ public:
     void collectDARTBundle();
     void collectLogsWithTimer();
     void deleteSWGConfigOverride();
-    void resetKDFDebugFlag();
+    void clearKDFDebugFlag();
     void restoreServiceProfile();
     void removeDebugConf();
     void LogCollectorFile();

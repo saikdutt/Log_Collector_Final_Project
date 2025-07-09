@@ -5,7 +5,10 @@ namespace fs = std::filesystem;
 #error "Need C++17 for filesystem support"
 #endif
 #include "Common.h"
+#include <iostream>
 #include <thread>
+#include <regex>
+#include <array>
 #include "Error.h"
 using namespace std;
 CommonUtils::CommonUtils(std::shared_ptr<Logger> logger) : logger(logger) {}
@@ -159,7 +162,7 @@ void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::stri
         logger->error("Error setting KDF debug flag: " + std::string(e.what()));
     }
 }
-void CommonUtils::clearKDFDebugFlagsSystem(const std::string& PATH) {
+void CommonUtils::clearKDFDebugFlagSystem(const std::string& PATH) {
     try{
         logger->info("Clearing KDF debug flag...");
         

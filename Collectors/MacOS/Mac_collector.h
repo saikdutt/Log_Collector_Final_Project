@@ -24,7 +24,7 @@ public:
     // NVM configuration functions
     void writeDebugConf();
     void addTroubleshootTag();
-    void findNVMAgentProcesses();
+    void findAllAgentProcesses();
     void setKDFDebugFlag();
     void resetKDFDebugFlag();
     void createSWGConfigOverride();
@@ -37,8 +37,10 @@ public:
     void clearKDFDebugFlag();
     void LogCollectorFile();
     void deleteSWGConfigOverride();
-    void collectAllFileISE_ZTA();
-    void deleteAllfilesISEPosture_ZTA();
+    void createAllFilesISEPosture();
+    void deleteAllfilesISEPosture();
+    void createAllFilesZTA();
+    void deleteAllfilesZTA();
     void collectLogsWithTimer();
 };
 

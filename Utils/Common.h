@@ -17,7 +17,7 @@ public:
     CommonUtils(std::shared_ptr<Logger> logger);
     void addTroubleshootTagSystem(const std::string& PATH);
     void setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue);
-    void clearKDFDebugFlagsSystem(const std::string& PATH);
+    void clearKDFDebugFlagSystem(const std::string& PATH);
     void writeDebugConfSystem(const std::string& PATH);
     void removeDebugConfSystem(const std::string& PATH);
     void createSWGConfigOverrideSystem(const std::string& PATH);
@@ -43,7 +43,6 @@ namespace MacPaths {
     // Config files
     const std::string DEBUG_CONF = NVM_PATH + "nvm_dbg.conf";
     const std::string SERVICE_PROFILE = NVM_PATH + "NVM_ServiceProfile.xml";
-    const std::string SWG_CONFIG_OVERRIDE = UMBRELLA_PATH + "SWGConfigOverride.json";
     //ISE and Secure Firewall Posture paths
     const std::string ISE_POSTURE_LOG = "~/.cisco/iseposture/log";
     const std::string SECURE_FIREWALL_POSTURE_OPT = SECURECLIENT_BASE + "securefirewallposture";

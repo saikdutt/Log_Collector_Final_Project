@@ -7,6 +7,7 @@ namespace fs = std::filesystem;
 #include <iostream>
 #include <thread>
 #include <regex>
+#include <array>
 #include "Mac_collector.h"
 #include "../../Utils/Logger.h"
 #include "../../Utils/Error.h"
@@ -90,7 +91,7 @@ void NVMLogCollectorMac::setKDFDebugFlag() {
     utils.setKDFDebugFlagSystem(MacPaths::ACSOCKTOOL, hexInput);
 }
 void NVMLogCollectorMac::clearKDFDebugFlag() {
-    utils.clearKDFDebugFlagsSystem(MacPaths::ACSOCKTOOL);
+    utils.clearKDFDebugFlagSystem(MacPaths::ACSOCKTOOL);
 }
 void NVMLogCollectorMac::createSWGConfigOverride() {
     utils.createSWGConfigOverrideSystem(MacPaths::UMBRELLA_PATH);
@@ -98,7 +99,7 @@ void NVMLogCollectorMac::createSWGConfigOverride() {
 void NVMLogCollectorMac::deleteSWGConfigOverride() {
     utils.deleteSWGConfigOverrideSystem(MacPaths::UMBRELLA_PATH);
 }
-void NVMLogCollectorMac::findNVMAgentProcesses() {
+void NVMLogCollectorMac::findAllAgentProcesses() {
     try{
         // NVM Agent Section
         logger->info("Searching for NVM agent processes...");
@@ -301,7 +302,7 @@ void NVMLogCollectorMac::findNVMAgentProcesses() {
 
         // ZTA Agent Section
         logger->info("Searching for ZTA agent processes...");
-        std::string ztaCmd1 = "ps -ef | grep csc_ztaagent";
+        std::string ztaCmd1 = "ps -ef | grep csc_zta_agent";
         int ztaResult1 = system(ztaCmd1.c_str());
 
         if (ztaResult1 == 0) {
@@ -509,6 +510,8 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
         std::vector<std::pair<std::string, std::string>> killCommands = {
             {"sudo pkill -f 'log stream.*com.cisco.anyconnect.macos.acsockext' || true", "KDF Logs"},
             {"sudo killall tcpdump || true", "Packet Capture"},
+            {"sudo pkill -f 'log stream.*acnvmagent' || true", "NVM Logs"},
+            {"sudo pkill -f 'log stream.*acumbrellaagent' || true", "Umbrella Logs"},
             {"sudo pkill -f 'log stream.*csc_iseagentd' || true", "ISE Posture Logs"},
             {"sudo pkill -f 'log stream.*csc_zta_agent' || true", "ZTA Logs"}
         };
@@ -664,7 +667,7 @@ void NVMLogCollectorMac::organizeAndArchiveLogs() {
         logger->error("Error organizing and archiving logs: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorMac::collectAllFileISE_ZTA() {
+void NVMLogCollectorMac::createAllFilesISEPosture() {
     try {
         // For ISE debuglogs.json
         logger->info("Creating empty debuglogs.json file...");
@@ -739,6 +742,72 @@ void NVMLogCollectorMac::collectAllFileISE_ZTA() {
         } else {
             logger->error("Failed to create v4debug.json at: " + jsonPath3);
         }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error creating debuglogs.json: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorMac::deleteAllfilesISEPosture() {
+    try {
+        logger->info("Removing all debug configuration files...");
+
+        // Get home directory
+        const char* homeDir6 = getenv("HOME");
+        if (!homeDir6) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+
+        // For ISE debuglogs.json
+        std::string isePath6 = MacPaths::ISE_POSTURE_LOG;
+        if (isePath6[0] == '~') {
+            isePath6 = std::string(homeDir6) + isePath6.substr(1);
+        }
+        std::string iseJsonPath6 = isePath6 + "/debuglogs.json";
+        std::string rmCmd1 = "rm -f " + iseJsonPath6;
+        if (system(rmCmd1.c_str()) == 0) {
+            logger->info("Successfully removed debuglogs.json");
+        } else {
+            logger->error("Failed to remove debuglogs.json");
+        }
+
+        // For opt firewall v4debug.json
+        std::string firewallPath6 = MacPaths::SECURE_FIREWALL_POSTURE_OPT;
+        std::string optJsonPath6 = firewallPath6 + "/v4debug.json";
+        std::string rmCmd2 = "sudo rm -f " + optJsonPath6;
+        if (system(rmCmd2.c_str()) == 0) {
+            logger->info("Successfully removed opt v4debug.json");
+        } else {
+            logger->error("Failed to remove opt v4debug.json");
+        }
+
+        // For home firewall v4debug.json
+        std::string firewallPath7 = MacPaths::SECURE_FIREWALL_POSTURE_HOME;
+        if (firewallPath7[0] == '~') {
+            firewallPath7 = std::string(homeDir6) + firewallPath7.substr(1);
+        }
+        std::string homeJsonPath6 = firewallPath7 + "/v4debug.json";
+        std::string rmCmd3 = "rm -f " + homeJsonPath6;
+        if (system(rmCmd3.c_str()) == 0) {
+            logger->info("Successfully removed home v4debug.json");
+        } else {
+            logger->error("Failed to remove home v4debug.json");
+        }
+    } 
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }catch (const std::exception& e) {
+        logger->error("Error deleting debug files: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorMac::createAllFilesZTA(){
+    try
+    {
         logger->info("Creating logconfig.json in ZTA path...");
         
         std::string ztaPath4 = MacPaths::ZTA_PATH;
@@ -811,57 +880,16 @@ void NVMLogCollectorMac::collectAllFileISE_ZTA() {
             logger->error("Failed to create flags.json at: " + jsonPath5);
         }
     }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
     catch (const std::exception& e) {
         logger->error("Error creating debuglogs.json: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorMac::deleteAllfilesISEPosture_ZTA() {
-    try {
-        logger->info("Removing all debug configuration files...");
-
-        // Get home directory
-        const char* homeDir6 = getenv("HOME");
-        if (!homeDir6) {
-            logger->error("Could not determine home directory");
-            return;
-        }
-
-        // For ISE debuglogs.json
-        std::string isePath6 = MacPaths::ISE_POSTURE_LOG;
-        if (isePath6[0] == '~') {
-            isePath6 = std::string(homeDir6) + isePath6.substr(1);
-        }
-        std::string iseJsonPath6 = isePath6 + "/debuglogs.json";
-        std::string rmCmd1 = "rm -f " + iseJsonPath6;
-        if (system(rmCmd1.c_str()) == 0) {
-            logger->info("Successfully removed debuglogs.json");
-        } else {
-            logger->error("Failed to remove debuglogs.json");
-        }
-
-        // For opt firewall v4debug.json
-        std::string firewallPath6 = MacPaths::SECURE_FIREWALL_POSTURE_OPT;
-        std::string optJsonPath6 = firewallPath6 + "/v4debug.json";
-        std::string rmCmd2 = "sudo rm -f " + optJsonPath6;
-        if (system(rmCmd2.c_str()) == 0) {
-            logger->info("Successfully removed opt v4debug.json");
-        } else {
-            logger->error("Failed to remove opt v4debug.json");
-        }
-
-        // For home firewall v4debug.json
-        std::string firewallPath7 = MacPaths::SECURE_FIREWALL_POSTURE_HOME;
-        if (firewallPath7[0] == '~') {
-            firewallPath7 = std::string(homeDir6) + firewallPath7.substr(1);
-        }
-        std::string homeJsonPath6 = firewallPath7 + "/v4debug.json";
-        std::string rmCmd3 = "rm -f " + homeJsonPath6;
-        if (system(rmCmd3.c_str()) == 0) {
-            logger->info("Successfully removed home v4debug.json");
-        } else {
-            logger->error("Failed to remove home v4debug.json");
-        }
-
+void NVMLogCollectorMac::deleteAllfilesZTA(){
+    try{
         // For ZTA logconfig.json
         std::string ztaPath6 = MacPaths::ZTA_PATH;
         std::string logconfigPath6 = ztaPath6 + "logconfig.json";
@@ -880,8 +908,11 @@ void NVMLogCollectorMac::deleteAllfilesISEPosture_ZTA() {
         } else {
             logger->error("Failed to remove flags.json");
         }
-
-    } catch (const std::exception& e) {
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }catch (const std::exception& e) {
         logger->error("Error deleting debug files: " + std::string(e.what()));
     }
 }

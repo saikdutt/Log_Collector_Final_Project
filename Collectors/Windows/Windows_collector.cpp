@@ -571,7 +571,7 @@ void NVMLogCollectorWindows::setKDFDebugFlag() {
         logger->error("Error setting KDF debug flag: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorWindows::resetKDFDebugFlag() {
+void NVMLogCollectorWindows::clearKDFDebugFlag() {
     auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         string SYSTEM_KDF_PATH = "C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\";
