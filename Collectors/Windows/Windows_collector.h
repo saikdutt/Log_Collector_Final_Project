@@ -6,9 +6,7 @@
 class NVMLogCollectorWindows : public virtual NVMLogCollector, public virtual SWGLogCollector {
 public:
     NVMLogCollectorWindows(const std::map<std::string, std::string>& config, 
-                    std::shared_ptr<Logger> logger,
-                    bool enable_debug_logs = false,
-                    int debug_level = 0);
+                    std::shared_ptr<Logger> logger);
     ~NVMLogCollectorWindows();
 
     void get_nvm_version();
@@ -29,7 +27,7 @@ public:
     void collectDARTBundle();
     void collectLogsWithTimer();
     void deleteSWGConfigOverride();
-    void resetKDFDebugFlag();
+    void clearKDFDebugFlag();
     void restoreServiceProfile();
     void removeDebugConf();
     void LogCollectorFile();

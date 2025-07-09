@@ -9,9 +9,6 @@ class NVMLogCollector : public virtual BaseCollector {
 protected:
     bool enable_debug_logs;
     int debug_level;
-    bool kdf_flags_set;
-    bool packet_capture_enabled;
-    bool enable_kdf_logging;
     std::string nvm_version;
 
 public:

@@ -11,16 +11,6 @@
     #include <filesystem>
     namespace fs = std::filesystem;
 #endif
-#include <fstream>
-#include <chrono>
-#include <ctime>
-#include <algorithm>
-#include <regex>
-#include <thread>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <limits.h>
 
 BaseCollector::BaseCollector(const std::map<std::string, std::string>& config, std::shared_ptr<Logger> logger)
     : config(config), logger(logger), log_path("") {
