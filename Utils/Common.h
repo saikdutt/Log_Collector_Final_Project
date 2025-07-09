@@ -56,36 +56,62 @@ namespace MacPaths {
 // Windows paths
 namespace WinPaths {
     // Base directories
-    const std::string SECURECLIENT_BASE = "C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\";
-    const std::string NVM_PATH = SECURECLIENT_BASE + "nvm\\";
+    const std::string SECURECLIENT_BASE = "C:\\ProgramData\\Cisco\\Cisco Secure Client\\";
+    const std::string SECURECLIENT_BASE_HOME = "C:\\Program Files (x86)\\Cisco\\Cisco Secure Client\\";
+    const std::string NVM_PATH = SECURECLIENT_BASE + "NVM\\";
+    const std::string NVM_PATH_HOME = SECURECLIENT_BASE_HOME + "NVM\\";
     const std::string UMBRELLA_PATH = SECURECLIENT_BASE + "umbrella\\";
     
     // Executables
-    const std::string NVM_AGENT = NVM_PATH + "bin\\acnvmagent.exe";
+    const std::string NVM_AGENT = NVM_PATH_HOME + "acnvmagent.exe";
+    const std::string ACSOCKTOOL = SECURECLIENT_BASE_HOME + "acsocktool.exe";
     const std::string UMBRELLA_AGENT = UMBRELLA_PATH + "acumbrellaagent.exe";
-    const std::string DART_CLI = SECURECLIENT_BASE + "DART\\dartcli.exe";
+    const std::string DART_CLI = SECURECLIENT_BASE_HOME + "DART\\dartcli.exe";
     
     // Config files
     const std::string DEBUG_CONF = NVM_PATH + "nvm_dbg.conf";
     const std::string SERVICE_PROFILE = NVM_PATH + "NVM_ServiceProfile.xml";
-    const std::string SWG_CONFIG_OVERRIDE = UMBRELLA_PATH + "SWGConfigOverride.json";
+    // ISE Posture and ZTA
+    static std::string getLocalAppDataPath() {
+        #ifdef _WIN32
+            char* localAppData = nullptr;
+            size_t len = 0;
+            _dupenv_s(&localAppData, &len, "LOCALAPPDATA");
+            if (localAppData) {
+                std::string path = std::string(localAppData) + "\\Cisco\\Cisco Secure Client\\";
+                free(localAppData);
+                return path;
+            }
+            return "";
+        #else
+            return "";
+        #endif
+    }
+
+    const std::string SECURECLIENT_LOCALAPPDATA = getLocalAppDataPath();
+    const std::string SECURECLIENT_ISEFIREWALL = SECURECLIENT_BASE_HOME + "Secure Firewall Posture\\";
+    const std::string SECURECLIENT_ISEFIREWALL_HOME = SECURECLIENT_LOCALAPPDATA  + "Secure Firewall Posture\\";
+    const std::string SECURECLIENT_ZTA = SECURECLIENT_BASE  + "ZTA\\";
 }
 
 // Linux paths
 namespace LinuxPaths {
     // Base directories
-    const std::string SECURECLIENT_BASE = "/opt/cisco/secure-client/";
-    const std::string NVM_PATH = SECURECLIENT_BASE + "nvm/";
+    const std::string SECURECLIENT_BASE = "/opt/cisco/secureclient/";
+    const std::string NVM_PATH = SECURECLIENT_BASE + "NVM/";
     const std::string UMBRELLA_PATH = SECURECLIENT_BASE + "umbrella/";
-    
+    const std::string ZTA_PATH = SECURECLIENT_BASE + "zta/";
+
     // Executables
-    const std::string NVM_AGENT = NVM_PATH + "acnvmagent";
+    const std::string NVM_AGENT = NVM_PATH + "bin/acnvmagent";
     const std::string UMBRELLA_AGENT = UMBRELLA_PATH + "acumbrellaagent";
-    
+    const std::string DART_CLI = "/opt/cisco/secureclient/dart/dartcli";
     // Config files
     const std::string DEBUG_CONF = NVM_PATH + "nvm_dbg.conf";
     const std::string SERVICE_PROFILE = NVM_PATH + "NVM_ServiceProfile.xml";
-    const std::string SWG_CONFIG_OVERRIDE = UMBRELLA_PATH + "SWGConfigOverride.json";
+    const std::string ISE_POSTURE_LOG = "~/.cisco/iseposture/log";
+    const std::string SECURE_FIREWALL_POSTURE_OPT = SECURECLIENT_BASE + "securefirewallposture";
+    const std::string SECURE_FIREWALL_POSTURE_HOME = "~/.cisco/secureclient/securefirewallposture";
 }
 
 #endif // COMMON_H

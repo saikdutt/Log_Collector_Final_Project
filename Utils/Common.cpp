@@ -6,9 +6,9 @@ namespace fs = std::filesystem;
 #endif
 #include "Common.h"
 #include <iostream>
-#include <thread>
-#include <regex>
 #include <array>
+#include <regex>
+#include <thread>
 #include "Error.h"
 using namespace std;
 CommonUtils::CommonUtils(std::shared_ptr<Logger> logger) : logger(logger) {}
@@ -20,8 +20,160 @@ void signalHandler(int signum) {
     if (signum == SIGINT) {
         g_stopCollection = true;
     }
-}   
-void CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
+}   void CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
+#if defined(__linux__) // Linux platform
+    try {
+        string pattern;
+        logger->info("\nSelect pattern for <TroubleShoot> tag:");
+        logger->info("1. NVM-TRACE-FLOWS");
+        logger->info("2. PROCESS-TREE-INFO");
+        logger->info("3. Combined logging");
+        logger->info("Choice (1-3): ");
+        int patternChoice;
+        cin >> patternChoice;
+        if (patternChoice >= 1 && patternChoice <= 3) {
+            switch (patternChoice) {
+                case 1:
+                    pattern = "NVM-TRACE-FLOWS";
+                    break;
+                case 2:
+                    pattern = "PROCESS-TREE-INFO";
+                    break;
+                case 3:
+                    pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
+                    break;
+                default:
+                    logger->error("[!] Invalid choice. Exiting.");
+            }
+        } else if (patternChoice != 4) {
+            logger->error("[!] Invalid choice. Exiting.");
+            return;
+        }
+
+        // Create a temp file path in /tmp directory
+        std::string tmpFile = "/tmp/nvm_profile_temp.xml";
+        
+        // Copy the XML to temp file with sudo for reading
+        std::string copyCmd = "sudo cp " + XML_FILE + " " + tmpFile + 
+                             " && sudo chmod 666 " + tmpFile;
+        int copyResult = system(copyCmd.c_str());
+        
+        if (copyResult != 0) {
+            // Check if file exists, if not create basic structure
+            std::string checkCmd = "sudo [ -f " + XML_FILE + " ] && echo \"exists\" || echo \"not exists\"";
+            FILE* pipe = popen(checkCmd.c_str(), "r");
+            if (!pipe) {
+                logger->error("[!] Failed to check XML file existence");
+                return;
+            }
+            
+            char buffer[128];
+            std::string result = "";
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL)
+                    result += buffer;
+            }
+            pclose(pipe);
+            
+            if (result.find("not exists") != std::string::npos) {
+                logger->error("[!] XML file not found: " + XML_FILE);
+                logger->info("[!] Creating a new XML file with basic structure.");
+                
+                std::string createCmd = "echo \"<NVMProfile>\n</NVMProfile>\" | sudo tee " + XML_FILE + 
+                                       " > /dev/null && sudo cp " + XML_FILE + " " + tmpFile + 
+                                       " && sudo chmod 666 " + tmpFile;
+                int createResult = system(createCmd.c_str());
+                
+                if (createResult != 0) {
+                    logger->error("[!] Failed to create XML file. Check permissions.");
+                    return;
+                }
+            } else {
+                logger->error("[!] Failed to copy XML file for editing.");
+                return;
+            }
+        }
+        
+        // Now read the temporary file
+        ifstream inFile(tmpFile);
+        string xmlContent;
+        string line;
+
+        if (!inFile) {
+            logger->error("[!] Cannot open temporary XML file");
+            return;
+        }
+
+        while (getline(inFile, line)) {
+            xmlContent += line + "\n";
+        }
+        inFile.close();
+
+        // Check for existing TroubleShoot tags and remove them
+        size_t startPos = 0;
+        size_t tagStartPos = 0;
+        size_t tagEndPos = 0;
+        bool existingTagsRemoved = false;
+            
+        // Search for any TroubleShoot tags and remove them
+        while ((startPos = xmlContent.find("<TroubleShoot>", startPos)) != string::npos) {
+            tagStartPos = startPos;
+            tagEndPos = xmlContent.find("</TroubleShoot>", startPos) + 15; // Length of </TroubleShoot>
+                
+            if (tagEndPos != string::npos) {
+                // Remove the entire tag
+                xmlContent.erase(tagStartPos, tagEndPos - tagStartPos);
+                existingTagsRemoved = true;
+                // Start search from the beginning since content has changed
+                startPos = 0;
+            } else {
+                // Move past this occurrence if no end tag found
+                startPos += 14; // Length of <TroubleShoot>
+            }
+        }
+            
+        if (existingTagsRemoved) {
+            logger->info("[*] Removed existing TroubleShoot tags.");
+        }
+
+        // Now add the new TroubleShoot tag
+        size_t profilePos = xmlContent.find("</NVMProfile>");
+        if (profilePos != string::npos) {
+            string insertTag = "  <TroubleShoot>\n    <Pattern>" + pattern + "</Pattern>\n  </TroubleShoot>\n";
+            xmlContent.insert(profilePos, insertTag);
+
+            // Write to temp file
+            ofstream outFile(tmpFile);
+            if (outFile) {
+                outFile << xmlContent;
+                outFile.close();
+                
+                // Copy back with sudo
+                std::string writeCmd = "sudo cp " + tmpFile + " " + XML_FILE;
+                int writeResult = system(writeCmd.c_str());
+                
+                if (writeResult == 0) {
+                    logger->info("[+] Inserted TroubleShoot tag with pattern: " + pattern);
+                    // Clean up
+                    std::remove(tmpFile.c_str());
+                } else {
+                    logger->error("[!] Failed to write to XML file. Check permissions.");
+                }
+            } else {
+                logger->error("[!] Failed to write to temporary file.");
+            }
+        } else {
+            logger->error("[!] Could not find </NVMProfile> tag in XML.");
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error adding TroubleShoot tag: " + std::string(e.what()));
+    }
+#else // macOS and Windows platforms
     try{
         string pattern;
         logger->info("\nSelect pattern for <TroubleShoot> tag:");
@@ -129,6 +281,7 @@ void CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
     catch (const std::exception& e) {
         logger->error("Error adding TroubleShoot tag: " + std::string(e.what()));
     }
+#endif
 }
 void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue) {
     try {
@@ -147,13 +300,18 @@ void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::stri
         }
 
         // Execute acsocktool command with hex value
-        string cmd = PATH + " -sdf 0x" + hexValueCopy;
+        #ifdef _WIN32
+        string cmd = "\"" + PATH + "\" -sdf 0x" + hexValueCopy;  // Windows needs quotes
+        #else
+        string cmd = PATH + " -sdf 0x" + hexValueCopy;  // Mac/Linux version
+        #endif
+        
         logger->info("[*] Setting KDF debug flag to 0x" + hexValueCopy + "...");
         logger->info("[*] Executing command: " + cmd);
         if (system(cmd.c_str()) == 0) {
             logger->info("[+] KDF debug flag set successfully");
         } else {
-            cerr << "[!] Failed to set KDF debug flag" << endl;
+            logger->error("[!] Failed to set KDF debug flag");
         }
     } catch(const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
@@ -173,7 +331,12 @@ void CommonUtils::clearKDFDebugFlagSystem(const std::string& PATH) {
         }
         
         // Construct and execute command
-        std::string cmd = PATH + " -cdf";
+        #ifdef _WIN32
+        std::string cmd = "\"" + PATH + "\" -cdf";  // Windows needs quotes for paths with spaces
+        #else
+        std::string cmd = PATH + " -cdf";  // Mac/Linux version
+        #endif
+        
         logger->info("Executing command: " + cmd);
         int result = system(cmd.c_str());
         
@@ -192,11 +355,25 @@ void CommonUtils::clearKDFDebugFlagSystem(const std::string& PATH) {
     }
 }
 void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
-    try
-    {
+    try {
         logger->info("Enter the debug value");
         int value;
         cin >> value;
+        
+#if defined(__linux__)
+        // Linux implementation - use sudo to write to protected directories
+        std::string cmd = "echo " + std::to_string(value) + " | sudo tee " + PATH + " > /dev/null";
+        
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Debug flag value " + std::to_string(value) + " written to " + PATH);
+        } else {
+            logger->error("[!] Failed to write to " + PATH);
+            logger->error("[!] Make sure you're running with sudo.");
+        }
+#else
+        // macOS/Windows implementation - use direct file access
         ofstream conf(PATH);
         if (conf) {
             conf << value;
@@ -207,6 +384,7 @@ void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
             logger->error("[!] Make sure you're running with sudo.");
             exit(1);
         }
+#endif
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
@@ -217,17 +395,22 @@ void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
     }
 }
 void CommonUtils::removeDebugConfSystem(const std::string& PATH) {
-    try{
+    try {
         logger->info("Removing NVM debug configuration file...");
 
-        std::string cmd = "sudo rm " + PATH;
+        std::string cmd;
+        #ifdef _WIN32
+            cmd = "del \"" + PATH + "\"";
+        #else
+            cmd = "sudo rm " + PATH;
+        #endif
 
         int result = system(cmd.c_str());
         
         if (result == 0) {
-            logger->info("Successfully removed debug configuration file: " + PATH);
+            logger->info("Successfully removed nvm_dbg.conf");
         } else {
-            logger->error("Failed to remove debug configuration file. Error code: " + std::to_string(result));
+            logger->error("Failed to remove nvm_dbg.conf. Error code: " + std::to_string(result));
         }
     }
     catch(const LogCollectorError& e) {
@@ -235,7 +418,7 @@ void CommonUtils::removeDebugConfSystem(const std::string& PATH) {
         logger->error("Details: " + std::string(e.what()));
     }
     catch (const std::exception& e) {
-        logger->error("Error collecting logs: " + std::string(e.what()));
+        logger->error("Error removing NVM debug configuration file: " + std::string(e.what()));
     }
 }
 void CommonUtils::collectLogsWithTimer() {

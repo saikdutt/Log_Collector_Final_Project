@@ -42,6 +42,7 @@ public:
     void createAllFilesZTA();
     void deleteAllfilesZTA();
     void collectLogsWithTimer();
+    void collectkdflogsmac();
 };
 
 #endif // MAC_COLLECTOR_H

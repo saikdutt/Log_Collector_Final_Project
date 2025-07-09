@@ -12,10 +12,17 @@ namespace fs = std::filesystem;
 #include "../../Utils/Logger.h"
 #include "../../Utils/Error.h"
 #include "../../Utils/Common.h"
-// Declare the global signal status variable from main.cpp
+
 using namespace std;
 
-// Constructor implementation
+/**
+ * @brief Constructs a MacOS NVM log collector with multiple module support
+ * @param config Configuration settings map for collector initialization
+ * @param logger Shared pointer to logger instance for output messages
+ * @param enable_debug_logs Optional flag to enable detailed debug logging (default: false)
+ * @param debug_level Optional debug verbosity level (default: 0)
+ * @note Initializes all collector modules (NVM, SWG, ISE, ZTA) and utilities
+ */
 NVMLogCollectorMac::NVMLogCollectorMac(const std::map<std::string, std::string>& config, 
     std::shared_ptr<Logger> logger,
     bool enable_debug_logs,
@@ -29,9 +36,19 @@ NVMLogCollectorMac::NVMLogCollectorMac(const std::map<std::string, std::string>&
 
     logger->info("NVMCollectorMac initialized with NVM and SWG support.");
 }
+
+/**
+ * @brief Destroys the MacOS NVM log collector instance
+ * @note Logs destruction message before cleanup
+ */
 NVMLogCollectorMac::~NVMLogCollectorMac() {
     logger->info("NVMLogCollectorMac destroyed");
 }
+
+/**
+ * @brief Gets NVM agent version by executing agent with -v flag
+ * @note Requires sudo privileges. Sets nvm_version to "unknown" on failure
+ */
 void NVMLogCollectorMac::get_nvm_version() {
     logger->info("Getting NVM agent version...");
     try {
@@ -75,30 +92,73 @@ void NVMLogCollectorMac::get_nvm_version() {
         logger->error("Error getting NVM version: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates debug configuration file for NVM agent
+ * @note Uses MacPaths::DEBUG_CONF path
+ */
 void NVMLogCollectorMac::writeDebugConf() {
     utils.writeDebugConfSystem(MacPaths::DEBUG_CONF);
 }
+
+/**
+ * @brief Removes NVM agent debug configuration file
+ * @note Uses MacPaths::DEBUG_CONF path
+ */
 void NVMLogCollectorMac::removeDebugConf() {
     utils.removeDebugConfSystem(MacPaths::DEBUG_CONF);
 }
+
+/**
+ * @brief Adds troubleshooting tag to NVM service profile
+ * @note Uses MacPaths::SERVICE_PROFILE path
+ */
 void NVMLogCollectorMac::addTroubleshootTag() {  
     utils.addTroubleshootTagSystem(MacPaths::SERVICE_PROFILE);
 }
+
+/**
+ * @brief Sets KDF debug flag using user input hexadecimal value
+ * @note Prompts for hex input (e.g., 0x20)
+ */
 void NVMLogCollectorMac::setKDFDebugFlag() {
     string hexInput;
     logger->info("\nEnter debug flag (hexadecimal, e.g., 0x20): ");
     cin >> hexInput;
     utils.setKDFDebugFlagSystem(MacPaths::ACSOCKTOOL, hexInput);
 }
+
+/**
+ * @brief Clears KDF debug flag settings
+ * @note Uses MacPaths::ACSOCKTOOL path
+ */
 void NVMLogCollectorMac::clearKDFDebugFlag() {
     utils.clearKDFDebugFlagSystem(MacPaths::ACSOCKTOOL);
 }
+
+/**
+ * @brief Creates SWG configuration override file
+ * @note Uses MacPaths::UMBRELLA_PATH location
+ */
 void NVMLogCollectorMac::createSWGConfigOverride() {
     utils.createSWGConfigOverrideSystem(MacPaths::UMBRELLA_PATH);
 }
+
+/**
+ * @brief Removes SWG configuration override file
+ * @note Uses MacPaths::UMBRELLA_PATH location
+ */
 void NVMLogCollectorMac::deleteSWGConfigOverride() {
     utils.deleteSWGConfigOverrideSystem(MacPaths::UMBRELLA_PATH);
 }
+
+/**
+ * @brief Finds, stops and restarts all agent processes (NVM, Umbrella, ISE, ZTA)
+ * @details Searches for running processes, captures their PIDs, terminates them,
+ *          then restarts them using appropriate paths from MacPaths namespace
+ * @note Requires sudo privileges for process management operations
+ * @note Uses ps, kill, and process restart commands
+ */
 void NVMLogCollectorMac::findAllAgentProcesses() {
     try{
         // NVM Agent Section
@@ -375,6 +435,11 @@ void NVMLogCollectorMac::findAllAgentProcesses() {
         logger->error("Error finding NVM agent processes: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates backup of NVM_ServiceProfile.xml in NVM path
+ * @note Uses MacPaths::SERVICE_PROFILE and requires sudo
+ */
 void NVMLogCollectorMac::backupServiceProfile() {
     try {
         logger->info("Creating backup of NVM_ServiceProfile.xml...");
@@ -399,6 +464,12 @@ void NVMLogCollectorMac::backupServiceProfile() {
         logger->error("Error creating backup: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Restores NVM_ServiceProfile.xml from backup
+ * @note Uses MacPaths::NVM_PATH and MacPaths::SERVICE_PROFILE
+ *       Removes backup after successful restoration
+ */
 void NVMLogCollectorMac::restoreServiceProfile() {
     try {
         logger->info("Restoring NVM_ServiceProfile.xml from backup...");
@@ -438,6 +509,11 @@ void NVMLogCollectorMac::restoreServiceProfile() {
     }
 }
 
+/**
+ * @brief Collects logs from all agents simultaneously with configurable duration
+ * @note Saves logs to Desktop, requires sudo privileges, uses MacPaths constants
+ * @note Uses log stream for agents and tcpdump for packet capture
+ */
 void NVMLogCollectorMac::collectAllLogsSimultaneously() {
     try{
         logger->info("Starting all log collections simultaneously...");
@@ -536,6 +612,12 @@ void NVMLogCollectorMac::collectAllLogsSimultaneously() {
         logger->error("Error collecting logs: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Collects DART logs using the DART CLI tool
+ * @note Saves the DART bundle to the user's Desktop
+ * @note Requires sudo privileges for DART CLI execution
+ */
 void NVMLogCollectorMac::collectDARTLogs() {
     try{
         logger->info("Starting DART log collection...");
@@ -569,6 +651,12 @@ void NVMLogCollectorMac::collectDARTLogs() {
         logger->error("Error collecting logs: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Clears the log collector file by truncating it
+ * @note Uses fs::current_path() to determine the build path
+ *       and checks if logcollector.log exists before truncating
+ */
 void NVMLogCollectorMac::LogCollectorFile(){
     try{
         std::string buildPath = fs::current_path().string();
@@ -589,6 +677,13 @@ void NVMLogCollectorMac::LogCollectorFile(){
         return ;
     }
 }
+
+/**
+ * @brief Organizes collected logs, creates a zip archive, and cleans up
+ * @note Moves log files to a dedicated directory on the Desktop
+ *       Creates a timestamped zip archive of the logs
+ *       Cleans up temporary directories and files after archiving
+ */
 void NVMLogCollectorMac::organizeAndArchiveLogs() {
     try{
         logger->info("Organizing and archiving collected logs...");
@@ -667,6 +762,12 @@ void NVMLogCollectorMac::organizeAndArchiveLogs() {
         logger->error("Error organizing and archiving logs: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates all necessary files for ISE Posture logs and secure firewall posture
+ * @note Creates debuglogs.json and v4debug.json in specified directories
+ *       Uses MacPaths constants for paths
+ */
 void NVMLogCollectorMac::createAllFilesISEPosture() {
     try {
         // For ISE debuglogs.json
@@ -751,6 +852,12 @@ void NVMLogCollectorMac::createAllFilesISEPosture() {
         logger->error("Error creating debuglogs.json: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Deletes all debug configuration files for ISE Posture and secure firewall posture
+ * @note Removes debuglogs.json and v4debug.json files from specified directories
+ *       Uses MacPaths constants for paths
+ */
 void NVMLogCollectorMac::deleteAllfilesISEPosture() {
     try {
         logger->info("Removing all debug configuration files...");
@@ -805,6 +912,12 @@ void NVMLogCollectorMac::deleteAllfilesISEPosture() {
         logger->error("Error deleting debug files: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates all necessary files for ZTA logs
+ * @note Creates logconfig.json and flags.json in the ZTA path
+ *       Uses MacPaths constants for paths
+ */
 void NVMLogCollectorMac::createAllFilesZTA(){
     try
     {
@@ -888,6 +1001,12 @@ void NVMLogCollectorMac::createAllFilesZTA(){
         logger->error("Error creating debuglogs.json: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Deletes all debug configuration files for ZTA logs
+ * @note Removes logconfig.json and flags.json from the ZTA path
+ *       Uses MacPaths constants for paths
+ */
 void NVMLogCollectorMac::deleteAllfilesZTA(){
     try{
         // For ZTA logconfig.json
@@ -914,5 +1033,36 @@ void NVMLogCollectorMac::deleteAllfilesZTA(){
         logger->error("Details: " + std::string(e.what()));
     }catch (const std::exception& e) {
         logger->error("Error deleting debug files: " + std::string(e.what()));
+    }
+}
+
+void NVMLogCollectorMac::collectkdflogsmac() {
+    try {
+        logger->info("Starting KDF log collection...");
+
+        // Get user's desktop path
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+
+        // Define log file path
+        std::string kdfLogsPath = std::string(homeDir) + "/Desktop/kdf_logs.log";
+        
+        // Create command for KDF log collection
+        std::string cmd = "sudo log stream --predicate 'process == \"com.cisco.anyconnect.macos.acsockext\"' "
+                          "--style syslog > " + kdfLogsPath + " &";
+        
+        // Start log collection
+        logger->info("Starting KDF logs collection...");
+        int result = system(cmd.c_str());
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting KDF logs: " + std::string(e.what()));
     }
 }

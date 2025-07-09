@@ -5,22 +5,9 @@ namespace fs = std::filesystem;
 #error "Need C++17 for filesystem support"
 #endif
 #include <iostream>
-#include <fstream>
-#include <filesystem>
-#include <unistd.h>
-#include <array>
-#include <cstdio>
-#include <stdexcept>
-#include <string>
-#include <cctype> 
-#include <sstream> 
-#include <atomic>
-#include <chrono>
 #include <thread>
-#include <signal.h>
-#include <iomanip>
-#include <limits>
-#include <vector>
+#include <regex>
+#include <array>     
 #include "Linux_collector.h"
 #include "../../Utils/Error.h"
 #include "../../Utils/Logger.h"
@@ -28,81 +15,55 @@ namespace fs = std::filesystem;
 // Declare the global signal status variable from main.cpp
 using namespace std;
 
-
 // Constructor implementation
 NVMLogCollectorLinux::NVMLogCollectorLinux(const std::map<std::string, std::string>& config, 
-    std::shared_ptr<Logger> logger)
+    std::shared_ptr<Logger> logger,
+    bool enable_debug_logs,
+    int debug_level)
     :BaseCollector(config, logger),
-    NVMLogCollector(config, logger),
-    SWGLogCollector(config, logger){
+    NVMLogCollector(config, logger, enable_debug_logs, debug_level),
+    SWGLogCollector(config, logger),
+    ISEPostureCollector(config, logger),
+    ZTACollector(config, logger),
+    utils(logger){
 
     logger->info("NVMCollectorLinux initialized with NVM and SWG support.");
 }
 NVMLogCollectorLinux::~NVMLogCollectorLinux() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     logger->info("NVMLogCollectorLinux destroyed");
 }
 
 void NVMLogCollectorLinux::get_nvm_version() {
-    // Use the class member logger instead of creating a new one
-    auto logger = std::make_shared<Logger>("logcollector.log");
     logger->info("Getting NVM agent version...");
-    
     try {
-        // Create a pipe to capture command output
         std::array<char, 128> buffer;
         std::string result;
-        
-        // Command to get NVM agent version - Linux path
-        std::string cmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent -v";
-        
-        // Execute command and capture output
+
+        // Correct Linux path to NVM agent
+        std::string cmd = "sudo " + LinuxPaths::NVM_AGENT +  " -v";
+
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
             throw std::runtime_error("Failed to execute command to get NVM version");
         }
-        
-        // Read output
+
         while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
             result += buffer.data();
         }
-        
-        // Close pipe
+
         int status = pclose(pipe);
         if (status != 0) {
             logger->warning("Command returned non-zero status: " + std::to_string(status));
         }
-        
-        // Parse version from output
-        size_t pos = result.find("Version");
-        if (pos != std::string::npos) {
-            // Extract version number after "Version: "
-            pos = result.find(":", pos);
-            if (pos != std::string::npos) {
-                // Skip the colon and any whitespace
-                pos++;
-                while (pos < result.length() && std::isspace(result[pos])) {
-                    pos++;
-                }
-                
-                // Extract the version number
-                size_t end_pos = pos;
-                while (end_pos < result.length() && 
-                       (std::isdigit(result[end_pos]) || result[end_pos] == '.')) {
-                    end_pos++;
-                }
-                
-                if (end_pos > pos) {
-                    nvm_version = result.substr(pos, end_pos - pos);
-                    logger->info("NVM agent version: " + nvm_version);
-                }
-            }
+
+        // Improved version extraction using regex
+        std::regex versionPattern("Version\\s*:\\s*(\\d+\\.\\d+\\.\\d+(?:-\\w+)?)");
+        std::smatch matches;
+        if (std::regex_search(result, matches, versionPattern) && matches.size() > 1) {
+            nvm_version = matches[1].str();
+        } else {
+            logger->info("NVM agent version found: " + result);
         }
-        if (nvm_version.empty()) {
-            logger->warning("Could not parse NVM version from output: " + result);
-            nvm_version = "unknown";
-        }
-        
     } catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
@@ -112,255 +73,71 @@ void NVMLogCollectorLinux::get_nvm_version() {
     }
 }
 
-std::string NVMLogCollectorLinux::get_nvm_version_string() {
-    return nvm_version;
-}
-void NVMLogCollectorLinux::findpath(){
-    // Linux path
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    logger->info("Finding NVM path for Linux...");
-    SYSTEM_NVM_PATH = "/opt/cisco/secureclient/NVM/";
-    
-    return;
-}
-void NVMLogCollectorLinux::initializePaths() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        CONF_FILE = SYSTEM_NVM_PATH + "nvm_dbg.conf";
-        XML_FILE = SYSTEM_NVM_PATH + "NVM_ServiceProfile.xml";
 
-        // Check if we can access the system directory
-        if (!fs::exists(SYSTEM_NVM_PATH)) {
-            logger->info("[!] System NVM directory not found: " + SYSTEM_NVM_PATH);
-            logger->info("[!] You need to run this program with sudo to access system directories.");
-        }
-    }catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error initializing paths: " + std::string(e.what()));
-    }
-}
 void NVMLogCollectorLinux::writeDebugConf() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        logger->info("Enter the debug value");
-        int value;
-        cin >> value;
-        
-        // Use sudo to write to the file since it's in a protected directory
-        std::string cmd = "echo " + std::to_string(value) + " | sudo tee " + CONF_FILE + " > /dev/null";
-        
-        int result = system(cmd.c_str());
-        
-        if (result == 0) {
-            logger->info("[+] Debug flag value " + std::to_string(value) + " written to " + CONF_FILE);
-        } else {
-            logger->error("[!] Failed to write to " + CONF_FILE);
-            logger->error("[!] Make sure you're running with sudo.");
-        }
-    }catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error writing debug configuration: " + std::string(e.what()));
-    }
+    utils.writeDebugConfSystem(LinuxPaths::DEBUG_CONF);
 }
 void NVMLogCollectorLinux::removeDebugConf() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        logger->info("Removing NVM debug configuration file...");
-        
-        std::string cmd = "sudo rm " + CONF_FILE;
-        
-        int result = system(cmd.c_str());
-        
-        if (result == 0) {
-            logger->info("Successfully removed nvm_dbg.conf");
-        } else {
-            logger->error("Failed to remove nvm_dbg.conf. Error code: " + std::to_string(result));
-        }
-    }catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error removing debug configuration: " + std::string(e.what()));
-    }
+    utils.removeDebugConfSystem(LinuxPaths::DEBUG_CONF);
+}
+void NVMLogCollectorLinux::addTroubleshootTag() {
+    utils.addTroubleshootTagSystem(LinuxPaths::SERVICE_PROFILE);
 }
 void NVMLogCollectorLinux::backupServiceProfile() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
+    try {
         logger->info("Creating backup of NVM_ServiceProfile.xml...");
-    
-        std::string cmd = "sudo cp " + SYSTEM_NVM_PATH + "NVM_ServiceProfile.xml " + 
-                        SYSTEM_NVM_PATH + "NVM_ServiceProfile.xml.bak";
         
+        // LinuxPaths::SERVICE_PROFILE already includes the filename, so don't append it again
+        std::string cmd = "sudo cp " + LinuxPaths::SERVICE_PROFILE + " " + 
+                          LinuxPaths::NVM_PATH + "NVM_ServiceProfile.xml.bak";
+        
+        logger->debug("Executing command: " + cmd);
         int result = system(cmd.c_str());
         
         if (result == 0) {
             logger->info("Backup created successfully as NVM_ServiceProfile.xml.bak");
         } else {
             logger->error("Failed to create backup, error code: " + std::to_string(result));
+            logger->error("Make sure you're running with sudo privileges.");
         }
-    }catch(const LogCollectorError& e) {
+    } catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         logger->error("Error creating backup: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorLinux::addTroubleshootTag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        string pattern;
-        logger->info("\nSelect pattern for <TroubleShoot> tag:");
-        logger->info("1. NVM-TRACE-FLOWS");
-        logger->info("2. PROCESS-TREE-INFO");
-        logger->info("3. Combined logging");
-        logger->info("Choice (1-3): ");
-        int patternChoice;
-        cin >> patternChoice;
-        if (patternChoice >= 1 && patternChoice <= 3) {
-            switch (patternChoice) {
-                case 1:
-                    pattern="NVM-TRACE-FLOWS";
-                    break;
-                case 2:
-                    pattern="PROCESS-TREE-INFO";
-                    break;
-                case 3:
-                    pattern="PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
-                    break;
-                default:
-                    cerr << "[!] Invalid choice. Exiting." << endl;
-            }
-        } else if (patternChoice != 4) {
-            cerr << "[!] Invalid choice. Exiting." << endl;
-            return;
-        }
-        // First check if XML file exists
-        if (!fs::exists(XML_FILE)) {
-            cerr << "[!] XML file not found: " << XML_FILE << endl;
-            cerr << "[!] Creating a new XML file with basic structure." << endl;
-                
-            // Use sudo for Linux to create the file in protected directory
-            string createCmd = "echo '<NVMProfile>\\n</NVMProfile>\\n' | sudo tee " + XML_FILE + " > /dev/null";
-            int result = system(createCmd.c_str());
-            
-            if (result != 0) {
-                cerr << "[!] Failed to create XML file. Check permissions." << endl;
-                exit(1);
-            }
-        }
-            
-        // Now read the file (may need sudo)
-        string catCmd = "sudo cat " + XML_FILE;
-        FILE* pipe = popen(catCmd.c_str(), "r");
-        if (!pipe) {
-            cerr << "[!] Cannot open XML file: " << XML_FILE << endl;
-            exit(1);
-        }
-        
-        string xmlContent;
-        array<char, 128> buffer;
-        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-            xmlContent += buffer.data();
-        }
-        pclose(pipe);
-        
-        if (xmlContent.empty()) {
-            cerr << "[!] Cannot read XML file or file is empty: " << XML_FILE << endl;
-            exit(1);
-        }
-
-        // Check for existing TroubleShoot tags and remove them
-        size_t startPos = 0;
-        size_t tagStartPos = 0;
-        size_t tagEndPos = 0;
-        bool existingTagsRemoved = false;
-            
-        // Search for any TroubleShoot tags and remove them
-        while ((startPos = xmlContent.find("<TroubleShoot>", startPos)) != string::npos) {
-            tagStartPos = startPos;
-            tagEndPos = xmlContent.find("</TroubleShoot>", startPos) + 15; // Length of </TroubleShoot>
-                
-            if (tagEndPos != string::npos) {
-                // Remove the entire tag
-                xmlContent.erase(tagStartPos, tagEndPos - tagStartPos);
-                existingTagsRemoved = true;
-                // Start search from the beginning since content has changed
-                startPos = 0;
-            } else {
-                // Move past this occurrence if no end tag found
-                startPos += 14; // Length of <TroubleShoot>
-            }
-        }
-            
-        if (existingTagsRemoved) {
-            logger->info("[*] Removed existing TroubleShoot tags.");
-        }
-
-        // Now add the new TroubleShoot tag
-        size_t profilePos = xmlContent.find("</NVMProfile>");
-        if (profilePos != string::npos) {
-            string insertTag = "  <TroubleShoot>\n    <Pattern>" + pattern + "</Pattern>\n  </TroubleShoot>\n";
-            xmlContent.insert(profilePos, insertTag);
-
-            // Write updated content back to file using sudo
-            string tmpFile = "/tmp/nvm_profile_temp.xml";
-            ofstream outFile(tmpFile);
-            if (outFile) {
-                outFile << xmlContent;
-                outFile.close();
-                
-                // Use sudo to copy temp file to destination
-                string copyCmd = "sudo cp " + tmpFile + " " + XML_FILE;
-                int result = system(copyCmd.c_str());
-                
-                if (result == 0) {
-                    logger->info("[+] Inserted TroubleShoot tag with pattern: " + pattern);
-                    // Clean up temp file
-                    fs::remove(tmpFile);
-                } else {
-                    logger->error("[!] Failed to write to XML file. Check permissions.");
-                    exit(1);
-                }
-            } else {
-                logger->error("[!] Failed to create temporary file.");
-                exit(1);
-            }
-        } else {
-            logger->error("[!] Could not find </NVMProfile> tag in XML.");
-            exit(1);
-        }
-    }catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error adding TroubleShoot tag: " + std::string(e.what()));
-    }
-}
 void NVMLogCollectorLinux::restoreServiceProfile() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
+    try {
         logger->info("Restoring NVM_ServiceProfile.xml from backup...");
     
-        std::string cmd = "sudo cp " + SYSTEM_NVM_PATH + "NVM_ServiceProfile.xml.bak " + 
-                        SYSTEM_NVM_PATH + "NVM_ServiceProfile.xml";
+        // Use LinuxPaths constants for correct path handling
+        std::string cmd = "sudo cp " + LinuxPaths::NVM_PATH + "NVM_ServiceProfile.xml.bak " + 
+                          LinuxPaths::SERVICE_PROFILE;
         
+        logger->debug("Executing command: " + cmd);
         int result = system(cmd.c_str());
         
         if (result == 0) {
             logger->info("NVM_ServiceProfile.xml restored successfully from backup");
         } else {
             logger->error("Failed to restore from backup, error code: " + std::to_string(result));
+            logger->error("Make sure you're running with sudo privileges.");
         }
-    }catch(const LogCollectorError& e) {
+
+        // Remove the backup file after successful restoration
+        std::string cmd1 = "sudo rm " + LinuxPaths::NVM_PATH + "NVM_ServiceProfile.xml.bak";
+        
+        logger->debug("Executing command: " + cmd1);
+        int result1 = system(cmd1.c_str());
+        
+        if (result1 == 0) {
+            logger->info("Successfully removed backup file");
+        } else {
+            logger->error("Failed to remove backup file. Error code: " + std::to_string(result1));
+        }
+    }
+    catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
     }
@@ -368,8 +145,7 @@ void NVMLogCollectorLinux::restoreServiceProfile() {
         logger->error("Error restoring service profile: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorLinux::findNVMAgentProcesses(){
-    auto logger = std::make_shared<Logger>("logcollector.log");
+void NVMLogCollectorLinux::findAllAgentProcesses(){
     try{
         logger->info("Searching for NVM agent processes in Linux...");
             
@@ -387,7 +163,7 @@ void NVMLogCollectorLinux::findNVMAgentProcesses(){
         // Create a pipe to capture command output
         std::array<char, 128> buffer;
         std::string result;
-        std::string cmd = "ps -ef | grep acnvmagent | grep -v grep"; // Filter out the grep process itself
+        std::string cmd = "ps -ef | grep acnvmagent"; // Filter out the grep process itself
             
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
@@ -424,122 +200,128 @@ void NVMLogCollectorLinux::findNVMAgentProcesses(){
             std::string killCmd = "sudo kill -9 " + pid;
             int result = system(killCmd.c_str());
             if (result == 0) {
-                    logger->info("Successfully terminated NVM agent process");
+                logger->info("Successfully terminated NVM agent process");
             } else {
                 logger->error("Failed to terminate process with PID: " + pid);
             }
         } else {
             logger->warning("No NVM agent PID found");
         }
-        logger->info("Searching for Umbrella agent processes...");
+        // ISE Agent Section
+        logger->info("Searching for ISE agent processes...");
+        std::string iseCmd1 = "ps -ef | grep csc_iseagentd";
+        int iseResult1 = system(iseCmd1.c_str());
 
-        // Command to find Umbrella agent processes
-        std::string umbrellaCmd1 = "ps -ef | grep acumbrellaagent";
-
-        int umbrellaResult1 = system(umbrellaCmd1.c_str());
-
-        if (umbrellaResult1 == 0) {
-            logger->info("Umbrella agent processes found and displayed");
+        if (iseResult1 == 0) {
+            logger->info("ISE agent processes found and displayed");
         } else {
-            logger->warning("Command execution returned non-zero status: " + std::to_string(umbrellaResult1));
+            logger->warning("Command execution returned non-zero status: " + std::to_string(iseResult1));
         }
 
-        // Create a pipe to capture command output
-        std::array<char, 128> umbrellaBuffer;
-        std::string umbrellaResult;
-        std::string umbrellaCmd = "ps -ef | grep acumbrellaagent";
+        std::array<char, 128> iseBuffer;
+        std::string iseResult;
+        std::string iseCmd = "ps -ef | grep csc_iseagentd";
 
-        FILE* umbrellaPipe = popen(umbrellaCmd.c_str(), "r");
-        if (!umbrellaPipe) {
-            logger->error("Failed to execute Umbrella process search command");
+        FILE* isePipe = popen(iseCmd.c_str(), "r");
+        if (!isePipe) {
+            logger->error("Failed to execute ISE process search command");
             return;
         }
 
-        // Read the command output
-        while (fgets(umbrellaBuffer.data(), umbrellaBuffer.size(), umbrellaPipe) != nullptr) {
-            umbrellaResult += umbrellaBuffer.data();
+        while (fgets(iseBuffer.data(), iseBuffer.size(), isePipe) != nullptr) {
+            iseResult += iseBuffer.data();
         }
-        pclose(umbrellaPipe);
+        pclose(isePipe);
 
-        // Parse the output to get PID
-        std::istringstream umbrellaStream(umbrellaResult);
-        std::string umbrellaLine;
-        std::string umbrellaPid;
+        std::istringstream iseStream(iseResult);
+        std::string iseLine;
+        std::string isePid;
 
-        if (std::getline(umbrellaStream, umbrellaLine)) {
-            std::istringstream umbrellaIss(umbrellaLine);
-            std::string umbrellaColumn;
-            int umbrellaColumnCount = 0;
+        if (std::getline(iseStream, iseLine)) {
+            std::istringstream iseIss(iseLine);
+            std::string iseColumn;
+            int iseColumnCount = 0;
                 
-            while (umbrellaIss >> umbrellaColumn && umbrellaColumnCount < 2) {
-                if (umbrellaColumnCount == 1) { // Second column
-                    umbrellaPid = umbrellaColumn;
+            while (iseIss >> iseColumn && iseColumnCount < 2) {
+                if (iseColumnCount == 1) {
+                    isePid = iseColumn;
                     break;
                 }
-                umbrellaColumnCount++;
+                iseColumnCount++;
             }
         }
 
-        if (!umbrellaPid.empty()) {
-            logger->info("Found Umbrella agent PID: " + umbrellaPid);
+        if (!isePid.empty()) {
+            logger->info("Found ISE agent PID: " + isePid);
+            std::string iseKillCmd = "sudo kill -9 " + isePid;
+            int iseKillResult = system(iseKillCmd.c_str());
             
-            // Use the PID to kill the process
-            std::string umbrellaKillCmd = "sudo kill -9 " + umbrellaPid;
-            int umbrellaKillResult = system(umbrellaKillCmd.c_str());
-            
-            if (umbrellaKillResult == 0) {
-                logger->info("Successfully terminated Umbrella agent process");
+            if (iseKillResult == 0) {
+                logger->info("Successfully terminated ISE agent process");
             } else {
-                logger->error("Failed to terminate Umbrella process with PID: " + umbrellaPid);
+                logger->error("Failed to terminate ISE process with PID: " + isePid);
             }
         } else {
-            logger->warning("No Umbrella agent PID found");
+            logger->warning("No ISE agent PID found");
         }
-        // std::string killCmd = "sudo pkill -f 'acnvmagent'";
-        // int killResult = system(killCmd.c_str());
 
-        // if (killResult == 0) {
-        //     logger->info("[+] Successfully stopped NVM agent");
-        // } else {
-        //     logger->warning("[!] NVM agent was not running or couldn't be stopped");
-        // }
+        // ZTA Agent Section
+        logger->info("Searching for ZTA agent processes...");
+        std::string ztaCmd1 = "ps -ef | grep csc_zta_agent";
+        int ztaResult1 = system(ztaCmd1.c_str());
 
-        // // Start NVM agent
-        // std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent &";
-        // int startResult = system(startCmd.c_str());
+        if (ztaResult1 == 0) {
+            logger->info("ZTA agent processes found and displayed");
+        } else {
+            logger->warning("Command execution returned non-zero status: " + std::to_string(ztaResult1));
+        }
 
-        // if (startResult == 0) {
-        //     logger->info("[+] Successfully started NVM agent");
-        // } else {
-        //     logger->error("[!] Failed to start NVM agent");
-        // }
+        std::array<char, 128> ztaBuffer;
+        std::string ztaResult;
+        std::string ztaCmd = "ps -ef | grep csc_zta_agent";
 
-        // // Kill Umbrella agent
-        // std::string killCmd1 = "sudo pkill -f 'acumbrellaagent'";
-        // int killResult1 = system(killCmd1.c_str());
+        FILE* ztaPipe = popen(ztaCmd.c_str(), "r");
+        if (!ztaPipe) {
+            logger->error("Failed to execute ZTA process search command");
+            return;
+        }
 
-        // if (killResult1 == 0) {
-        //     logger->info("[+] Successfully stopped Umbrella agent");
-        // } else {
-        //     logger->warning("[!] Umbrella agent was not running or couldn't be stopped");
-        // }
+        while (fgets(ztaBuffer.data(), ztaBuffer.size(), ztaPipe) != nullptr) {
+            ztaResult += ztaBuffer.data();
+        }
+        pclose(ztaPipe);
 
-        // // Start Umbrella agent
-        // std::string startCmd1 = "sudo /opt/cisco/secureclient/umbrella/acumbrellaagent &";
-        // int startResult1 = system(startCmd1.c_str());
+        std::istringstream ztaStream(ztaResult);
+        std::string ztaLine;
+        std::string ztaPid;
 
-        // if (startResult1 == 0) {
-        //     logger->info("[+] Successfully started Umbrella agent");
-        // } else {
-        //     logger->error("[!] Failed to start Umbrella agent");
-        // }
+        if (std::getline(ztaStream, ztaLine)) {
+            std::istringstream ztaIss(ztaLine);
+            std::string ztaColumn;
+            int ztaColumnCount = 0;
+                
+            while (ztaIss >> ztaColumn && ztaColumnCount < 2) {
+                if (ztaColumnCount == 1) {
+                    ztaPid = ztaColumn;
+                    break;
+                }
+                ztaColumnCount++;
+            }
+        }
 
-        // // Wait for services to start
-        // for (int i = 30; i > 0; i--) {
-        //     std::cout << "\r\033[K" << "Starting in " << i << " seconds..." << std::flush;
-        //     std::this_thread::sleep_for(std::chrono::seconds(1));
-        // }
-        // std::cout << "\r\033[K" << "Starting log collection..." << std::endl;
+        if (!ztaPid.empty()) {
+            logger->info("Found ZTA agent PID: " + ztaPid);
+            std::string ztaKillCmd = "sudo kill -9 " + ztaPid;
+            int ztaKillResult = system(ztaKillCmd.c_str());
+            
+            if (ztaKillResult == 0) {
+                logger->info("Successfully terminated ZTA agent process");
+            } else {
+                logger->error("Failed to terminate ZTA process with PID: " + ztaPid);
+            }
+        } else {
+            logger->warning("No ZTA agent PID found");
+        }
     }catch(const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
@@ -549,20 +331,7 @@ void NVMLogCollectorLinux::findNVMAgentProcesses(){
     }
 }
 void NVMLogCollectorLinux::setKDFDebugFlag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     logger->info("Setting KDF debug level...");
-    
-    // Display menu with debug level options
-    logger->info("\nSelect KDF debug level (0-7):");
-    logger->info("0 - Disabled (Normal Mode)");
-    logger->info("1 - Basic Logging");
-    logger->info("2 - Moderate Logging");
-    logger->info("3 - Enhanced Logging");
-    logger->info("4 - Process Tree Debug");
-    logger->info("5 - Connection Debug");
-    logger->info("6 - Full Debug");
-    logger->info("7 - Maximum Debug (All Components)");
-    
     int debugLevel;
     logger->info("Enter debug level (0-7): ");
     cin >> debugLevel;
@@ -622,8 +391,7 @@ void NVMLogCollectorLinux::setKDFDebugFlag() {
         logger->error("[!] Error setting KDF debug level: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorLinux::resetKDFDebugFlag() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
+void NVMLogCollectorLinux::clearKDFDebugFlag() {
     logger->info("[*] Resetting KDF debug flag to disable debug mode...");
     
     try {
@@ -648,7 +416,6 @@ void NVMLogCollectorLinux::resetKDFDebugFlag() {
     }
 }
 void NVMLogCollectorLinux::collectDARTLogs() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Starting DART log collection...");
         
@@ -661,11 +428,9 @@ void NVMLogCollectorLinux::collectDARTLogs() {
         
         std::string desktopPath = std::string(homeDir) + "/Desktop";
         std::string dartBundle = desktopPath + "/DART_Bundle.zip";
-        
-        // Check if dartcli exists
-        std::string dartcliPath = "/opt/cisco/secureclient/dart/dartcli";
+
         // Construct the DART collection command
-        std::string cmd = "sudo " + dartcliPath + " -dst " + dartBundle;
+        std::string cmd = "sudo " + LinuxPaths::DART_CLI + " -dst " + dartBundle;
         
         logger->info("Executing DART collection command: " + cmd);
         logger->info("This may take several minutes. Please wait...");
@@ -687,40 +452,7 @@ void NVMLogCollectorLinux::collectDARTLogs() {
         logger->error("Error collecting DART logs: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorLinux::collectLogsWithTimer() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
-    try{
-        // Set up signal handler
-        signal(SIGINT, signalHandler);
-        g_stopCollection = false;
-        
-        // Start time
-        auto startTime = std::chrono::steady_clock::now();
-        int elapsedSeconds = 0;
-        
-        while (!g_stopCollection) {
-            auto currentTime = std::chrono::steady_clock::now();
-            elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>
-                            (currentTime - startTime).count();
-            
-            // Show elapsed time
-            std::cout << "\r\033[K" << "Time elapsed: " 
-                    << std::setfill('0') << std::setw(2) << elapsedSeconds/60 << ":"
-                    << std::setfill('0') << std::setw(2) << elapsedSeconds%60 
-                    << " (Press Ctrl+C to stop)" << std::flush;
-            
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }catch (const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    } 
-    catch (const std::exception& e) {
-        logger->error("Error during log collection timer: " + std::string(e.what()));
-    }
-}
 void NVMLogCollectorLinux::collectAllLogsSimultaneously() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Starting all log collections simultaneously...");
         logger->info("Press Ctrl+C to stop all collections when ready");
@@ -735,7 +467,8 @@ void NVMLogCollectorLinux::collectAllLogsSimultaneously() {
         std::string kdfLogsPath = std::string(homeDir) + "/Desktop/kdf_logs.log";
         std::string nvmLogsPath = std::string(homeDir) + "/Desktop/nvm_system_logs.log";
         std::string packetCapturePath = std::string(homeDir) + "/Desktop/PacketCapture.pcap";
-
+        std::string isePostureLogsPath = std::string(homeDir) + "/Desktop/ise_posture_logs.log";
+        std::string ztaLogsPath = std::string(homeDir) + "/Desktop/zta_logs.log";
         // Create a vector of pairs containing both command and description
         std::vector<std::pair<std::string, std::string>> commands = {
             {
@@ -751,6 +484,16 @@ void NVMLogCollectorLinux::collectAllLogsSimultaneously() {
                 "sudo tcpdump -w"  + packetCapturePath + " & ",
                 "Packet Capture"
             },
+            {
+                "sudo tail /var/log/syslog -f | grep -i \"posture\" > " + 
+                isePostureLogsPath + " &",
+                "ISE Posture Logs"
+            },
+            {
+                "sudo tail /var/log/syslog -f | grep -i \"zta\" > " + 
+                ztaLogsPath+ " &",
+                "ZTA Logs"
+            },
         };
 
         // Start all collections with descriptive logging
@@ -764,7 +507,7 @@ void NVMLogCollectorLinux::collectAllLogsSimultaneously() {
                 logger->error("[!] Failed to start " + description + " collection");
             }
         }
-        collectLogsWithTimer();
+        utils.collectLogsWithTimer();
         // When Ctrl+C is pressed, stop all collections
         logger->info("\nStopping all log collections...");
         
@@ -782,35 +525,22 @@ void NVMLogCollectorLinux::collectAllLogsSimultaneously() {
                 "sudo killall tcpdump || true",
                 "Packet Capture"
             },
+            {
+                "sudo pkill -f 'tail.*syslog.*grep.*posture' || true",
+                "ISE Posture Logs"
+            },
+            {
+                "sudo pkill -f 'tail.*syslog.*grep.*zta' || true",
+                "ZTA Logs"
+            }
         };
 
         // Stop each process with descriptive logging
         for (const auto& [cmd, description] : stopCommands) {
             logger->info("Stopping " + description + " collection...");
             int result = system(cmd.c_str());
-            if (result == 0) {
-                logger->info("[+] Successfully stopped " + description + " collection");
-            } else {
-                logger->warning("[!] Failed to stop " + description + " collection. It may have already been stopped.");
-            }
         }
         logger->info("Logs have been saved to the Desktop");
-        std::string startCmd = "sudo /opt/cisco/secureclient/NVM/bin/acnvmagent &";
-        int startResult = system(startCmd.c_str());
-
-        if (startResult == 0) {
-            logger->info("[+] Successfully started NVM agent");
-        } else {
-            logger->error("[!] Failed to start NVM agent");
-        }
-        std::string startCmd1 = "sudo /opt/cisco/secureclient/umbrella/acumbrellaagent &";
-        int startResult1 = system(startCmd1.c_str());
-
-        if (startResult1 == 0) {
-            logger->info("[+] Successfully started Umbrella agent");
-        } else {
-            logger->error("[!] Failed to start Umbrella agent");
-        }
     }catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
@@ -840,7 +570,6 @@ void NVMLogCollectorLinux::LogCollectorFile() {
     }
 }
 void NVMLogCollectorLinux::organizeAndArchiveLogs() {
-    auto logger = std::make_shared<Logger>("logcollector.log");
     try{
         logger->info("Organizing and archiving collected logs...");
         
@@ -879,6 +608,8 @@ void NVMLogCollectorLinux::organizeAndArchiveLogs() {
                             desktopPath + "/nvm_system_logs.log " +
                             desktopPath + "/PacketCapture.pcap " +
                             desktopPath + "/DART_Bundle.zip " +
+                            desktopPath + "/ise_posture_logs.log " +
+                            desktopPath + "/zta_logs.log " +
                             nvmLogsDir + "/ 2>/dev/null";
         
         logger->info("Moving log files to nvm_logs directory");
@@ -912,5 +643,427 @@ void NVMLogCollectorLinux::organizeAndArchiveLogs() {
     } 
     catch (const std::exception& e) {
         logger->error("Error organizing and archiving logs: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorLinux::createAllFilesISEPosture() {
+    try {
+        logger->info("Checking and creating debug files for ISE and ZTA modules...");
+
+        // For ISE debuglogs.json
+        logger->info("Checking ISE posture log path...");
+        
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+        
+        std::string isePath = LinuxPaths::ISE_POSTURE_LOG;
+        if (isePath[0] == '~') {
+            isePath = std::string(homeDir) + isePath.substr(1);
+        }
+        
+        // Check if directory exists - only proceed if it does
+        std::string checkDirCmd = "test -d " + isePath + " && echo exists";
+        FILE* pipe = popen(checkDirCmd.c_str(), "r");
+        char buffer[128];
+        std::string result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                logger->info("ISE posture log directory exists, creating debuglogs.json");
+                
+                std::string jsonPath1 = isePath + "/debuglogs.json";
+                std::ofstream jsonFile1(jsonPath1);
+                
+                if (jsonFile1.is_open()) {
+                    jsonFile1.close();
+                    logger->info("Successfully created empty debuglogs.json at: " + jsonPath1);
+                } else {
+                    logger->error("Failed to create debuglogs.json at: " + jsonPath1);
+                }
+            } else {
+                logger->info("ISE posture log directory does not exist, skipping debuglogs.json creation");
+            }
+        }
+        
+        // For secure firewall posture v4debug.json in /opt path
+        logger->info("Checking secure firewall posture path in /opt...");
+        std::string firewallPath1 = LinuxPaths::SECURE_FIREWALL_POSTURE_OPT;
+        
+        std::string checkDirCmd2 = "sudo test -d " + firewallPath1 + " && echo exists";
+        pipe = popen(checkDirCmd2.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                logger->info("Secure firewall posture directory exists in /opt, creating v4debug.json");
+                
+                std::string jsonPath2 = firewallPath1 + "/v4debug.json";
+                std::string touchCmd = "sudo touch " + jsonPath2;
+                
+                if (system(touchCmd.c_str()) == 0) {
+                    std::string chmodCmd = "sudo chmod 666 " + jsonPath2;
+                    system(chmodCmd.c_str());
+                    logger->info("Successfully created empty v4debug.json at: " + jsonPath2);
+                } else {
+                    logger->error("Failed to create v4debug.json at: " + jsonPath2);
+                }
+            } else {
+                logger->info("Secure firewall posture directory in /opt does not exist, skipping v4debug.json creation");
+            }
+        }
+        
+        // For secure firewall posture v4debug.json in home directory
+        logger->info("Checking secure firewall posture path in home directory...");
+        std::string firewallPath2 = LinuxPaths::SECURE_FIREWALL_POSTURE_HOME;
+        if (firewallPath2[0] == '~') {
+            firewallPath2 = std::string(homeDir) + firewallPath2.substr(1);
+        }
+        
+        std::string checkDirCmd3 = "test -d " + firewallPath2 + " && echo exists";
+        pipe = popen(checkDirCmd3.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                logger->info("Secure firewall posture directory exists in home, creating v4debug.json");
+                
+                std::string jsonPath3 = firewallPath2 + "/v4debug.json";
+                std::ofstream jsonFile2(jsonPath3);
+                
+                if (jsonFile2.is_open()) {
+                    jsonFile2.close();
+                    logger->info("Successfully created empty v4debug.json at: " + jsonPath3);
+                } else {
+                    logger->error("Failed to create v4debug.json at: " + jsonPath3);
+                }
+            } else {
+                logger->info("Secure firewall posture directory in home does not exist, skipping v4debug.json creation");
+            }
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error creating debug files: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorLinux::deleteAllFilesISEPosture() {
+    try {
+        logger->info("Removing debug configuration files if they exist...");
+
+        // Get home directory
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+
+        // For ISE debuglogs.json
+        std::string isePath = LinuxPaths::ISE_POSTURE_LOG;
+        if (isePath[0] == '~') {
+            isePath = std::string(homeDir) + isePath.substr(1);
+        }
+        std::string iseJsonPath = isePath + "/debuglogs.json";
+        
+        // Check if ISE debuglogs.json exists
+        std::string checkCmd1 = "test -f " + iseJsonPath + " && echo exists";
+        FILE* pipe = popen(checkCmd1.c_str(), "r");
+        char buffer[128];
+        std::string result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                // File exists, delete it
+                std::string rmCmd1 = "rm -f " + iseJsonPath;
+                if (system(rmCmd1.c_str()) == 0) {
+                    logger->info("Successfully removed ISE debuglogs.json");
+                } else {
+                    logger->error("Failed to remove ISE debuglogs.json");
+                }
+            } else {
+                logger->info("ISE debuglogs.json not found, skipping");
+            }
+        }
+
+        // For opt firewall v4debug.json
+        std::string firewallPath = LinuxPaths::SECURE_FIREWALL_POSTURE_OPT;
+        std::string optJsonPath = firewallPath + "/v4debug.json";
+        
+        // Check if opt v4debug.json exists
+        std::string checkCmd2 = "sudo test -f " + optJsonPath + " && echo exists";
+        pipe = popen(checkCmd2.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                // File exists, delete it
+                std::string rmCmd2 = "sudo rm -f " + optJsonPath;
+                if (system(rmCmd2.c_str()) == 0) {
+                    logger->info("Successfully removed opt v4debug.json");
+                } else {
+                    logger->error("Failed to remove opt v4debug.json");
+                }
+            } else {
+                logger->info("Opt v4debug.json not found, skipping");
+            }
+        }
+
+        // For home firewall v4debug.json
+        std::string firewallPath2 = LinuxPaths::SECURE_FIREWALL_POSTURE_HOME;
+        if (firewallPath2[0] == '~') {
+            firewallPath2 = std::string(homeDir) + firewallPath2.substr(1);
+        }
+        std::string homeJsonPath = firewallPath2 + "/v4debug.json";
+        
+        // Check if home v4debug.json exists
+        std::string checkCmd3 = "test -f " + homeJsonPath + " && echo exists";
+        pipe = popen(checkCmd3.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                // File exists, delete it
+                std::string rmCmd3 = "rm -f " + homeJsonPath;
+                if (system(rmCmd3.c_str()) == 0) {
+                    logger->info("Successfully removed home v4debug.json");
+                } else {
+                    logger->error("Failed to remove home v4debug.json");
+                }
+            } else {
+                logger->info("Home v4debug.json not found, skipping");
+            }
+        }
+    } catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    } catch (const std::exception& e) {
+        logger->error("Error deleting debug files: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorLinux::createAllFilesZTA() {
+    try{
+         // Declare these variables at the beginning of the function
+        FILE* pipe = nullptr;
+        char buffer[128];
+        std::string result;
+        // For ZTA logconfig.json
+        logger->info("Checking ZTA path for logconfig.json...");
+        std::string ztaPath = LinuxPaths::ZTA_PATH;
+        
+        std::string checkDirCmd4 = "sudo test -d " + ztaPath + " && echo exists";
+        pipe = popen(checkDirCmd4.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                logger->info("ZTA directory exists, creating logconfig.json");
+                
+                std::string jsonPath4 = ztaPath + "logconfig.json";
+                std::string touchCmd4 = "sudo touch " + jsonPath4;
+                
+                if (system(touchCmd4.c_str()) == 0) {
+                    std::string chmodCmd4 = "sudo chmod 666 " + jsonPath4;
+                    system(chmodCmd4.c_str());
+                    
+                    std::string writeCmd4 = "echo '{\n    \"global\": \"DBG_TRACE\"\n}' | sudo tee " + jsonPath4 + " > /dev/null";
+                    if (system(writeCmd4.c_str()) == 0) {
+                        logger->info("Successfully created logconfig.json at: " + jsonPath4);
+                    } else {
+                        logger->error("Failed to write to logconfig.json at: " + jsonPath4);
+                    }
+                } else {
+                    logger->error("Failed to create logconfig.json at: " + jsonPath4);
+                }
+            } else {
+                logger->info("ZTA directory does not exist, skipping logconfig.json creation");
+            }
+        }
+        
+        // For ZTA flags.json
+        logger->info("Checking ZTA path for flags.json...");
+        
+        std::string checkDirCmd5 = "sudo test -d " + ztaPath + " && echo exists";
+        pipe = popen(checkDirCmd5.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                logger->info("ZTA directory exists, creating flags.json");
+                
+                std::string jsonPath5 = ztaPath + "flags.json";
+                std::string touchCmd5 = "sudo touch " + jsonPath5;
+                
+                if (system(touchCmd5.c_str()) == 0) {
+                    std::string chmodCmd5 = "sudo chmod 666 " + jsonPath5;
+                    system(chmodCmd5.c_str());
+                    
+                    std::string flagsContent = "{\n"
+                                             "    \"datapath\": {\n"
+                                             "        \"quic\": {\n"
+                                             "            \"enabled\": false,\n"
+                                             "            \"unreliable_datagram\": true,\n"
+                                             "            \"fallback_http2\": true,\n"
+                                             "            \"max_datagram_size\": 1350\n"
+                                             "        }\n"
+                                             "    },\n"
+                                             "    \"flow_log\": {\"max_count\": 35000},\n"
+                                             "    \"enrollment\": {\n"
+                                             "        \"acme\": {\n"
+                                             "            \"cert_renewal_interval_seconds\": 86400\n"
+                                             "        }\n"
+                                             "    }\n"
+                                             "}";
+                    
+                    std::string writeCmd5 = "echo '" + flagsContent + "' | sudo tee " + jsonPath5 + " > /dev/null";
+                    if (system(writeCmd5.c_str()) == 0) {
+                        logger->info("Successfully created flags.json at: " + jsonPath5);
+                    } else {
+                        logger->error("Failed to write to flags.json at: " + jsonPath5);
+                    }
+                } else {
+                    logger->error("Failed to create flags.json at: " + jsonPath5);
+                }
+            } else {
+                logger->info("ZTA directory does not exist, skipping flags.json creation");
+            }
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    } catch (const std::exception& e) {
+        logger->error("Error deleting debug files: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorLinux::deleteAllFilesZTA(){
+    try{
+        // Declare these variables at the beginning of the function
+        FILE* pipe = nullptr;
+        char buffer[128];
+        std::string result;
+        // For ZTA logconfig.json
+        std::string ztaPath = LinuxPaths::ZTA_PATH;
+        std::string logconfigPath = ztaPath + "logconfig.json";
+        
+        // Check if ZTA logconfig.json exists
+        std::string checkCmd4 = "sudo test -f " + logconfigPath + " && echo exists";
+        pipe = popen(checkCmd4.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                // File exists, delete it
+                std::string rmCmd4 = "sudo rm -f " + logconfigPath;
+                if (system(rmCmd4.c_str()) == 0) {
+                    logger->info("Successfully removed ZTA logconfig.json");
+                } else {
+                    logger->error("Failed to remove ZTA logconfig.json");
+                }
+            } else {
+                logger->info("ZTA logconfig.json not found, skipping");
+            }
+        }
+
+        // For ZTA flags.json
+        std::string flagsPath = ztaPath + "flags.json";
+        
+        // Check if ZTA flags.json exists
+        std::string checkCmd5 = "sudo test -f " + flagsPath + " && echo exists";
+        pipe = popen(checkCmd5.c_str(), "r");
+        result = "";
+        
+        if (pipe) {
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    result += buffer;
+                }
+            }
+            pclose(pipe);
+            
+            if (result.find("exists") != std::string::npos) {
+                // File exists, delete it
+                std::string rmCmd5 = "sudo rm -f " + flagsPath;
+                if (system(rmCmd5.c_str()) == 0) {
+                    logger->info("Successfully removed ZTA flags.json");
+                } else {
+                    logger->error("Failed to remove ZTA flags.json");
+                }
+            } else {
+                logger->info("ZTA flags.json not found, skipping");
+            }
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    } catch (const std::exception& e) {
+        logger->error("Error deleting debug files: " + std::string(e.what()));
     }
 }
