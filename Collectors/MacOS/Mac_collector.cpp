@@ -158,6 +158,8 @@ void NVMLogCollectorMac::deleteSWGConfigOverride() {
  *          then restarts them using appropriate paths from MacPaths namespace
  * @note Requires sudo privileges for process management operations
  * @note Uses ps, kill, and process restart commands
+ * @note Uses `ps -ef` to list processes and `grep` to filter for specific agents
+ * @note Terminates processes using `kill -9` if their PIDs are found
  */
 void NVMLogCollectorMac::findAllAgentProcesses() {
     try{
@@ -508,111 +510,443 @@ void NVMLogCollectorMac::restoreServiceProfile() {
         logger->error("Error restoring service profile: " + std::string(e.what()));
     }
 }
-
 /**
- * @brief Collects logs from all agents simultaneously with configurable duration
- * @note Saves logs to Desktop, requires sudo privileges, uses MacPaths constants
- * @note Uses log stream for agents and tcpdump for packet capture
+ * @brief Collects KDF-specific logs on macOS
+ * @note Saves logs to Desktop/kdf_logs.log
+ * @note Uses log stream to capture kernel extension logs
  */
-void NVMLogCollectorMac::collectAllLogsSimultaneously() {
-    try{
-        logger->info("Starting all log collections simultaneously...");
-        logger->info("Press Ctrl+C to stop all collections when ready");
-
+void NVMLogCollectorMac::collectKdfLogs() {
+    try {
+        logger->info("Starting KDF log collection...");
+        
         const char* homeDir = getenv("HOME");
         if (!homeDir) {
             logger->error("Could not determine home directory");
             return;
         }
-
-        // Define paths for different log files
-        std::string kdfLogsPath = std::string(homeDir) + "/Desktop/kdf_logs.log";
-        std::string nvmLogsPath = std::string(homeDir) + "/Desktop/nvm_system_logs.log";
-        std::string umbrellaLogsPath = std::string(homeDir) + "/Desktop/swg_umbrella_logs.log";
-        std::string packetCapturePath = std::string(homeDir) + "/Desktop/PacketCapture.pcap";
-        std::string isePostureLogsPath = std::string(homeDir) + "/Desktop/ise_posture_logs.log";
-        std::string ztaLogsPath = std::string(homeDir) + "/Desktop/zta_logs.log";
-
-        // Construct commands for different log collections
-        // Create a vector of pairs containing both command and description
-        std::vector<std::pair<std::string, std::string>> commands = {
-            {
-                + "sudo log stream --predicate 'process == \"com.cisco.anyconnect.macos.acsockext\"' "
-                "--style syslog > " + kdfLogsPath + " &",
-                "KDF Logs"
-            },
-            {
-                "sudo log stream --predicate 'process == \"acnvmagent\"' --style syslog > " + 
-                nvmLogsPath + " &",
-                "NVM System Logs"
-            },
-            {
-                "sudo tcpdump -w " + packetCapturePath + " &",
-                "Packet Capture"
-            },
-            {
-                "sudo log stream --predicate 'process == \"acumbrellaagent\"' --style syslog > " + 
-                umbrellaLogsPath + " &",
-                "Umbrella/SWG Logs"
-            },
-            {
-                "sudo log stream --predicate 'process == \"csc_iseagentd\"' --style syslog > " + 
-                isePostureLogsPath + " &",
-                "ISE Posture Logs"
-            },
-            {
-                "sudo log stream --predicate 'process == \"csc_zta_agent\"' --style syslog > " + 
-                ztaLogsPath + " &",
-                "ZTA Logs"
-            }
-        };
-
-        // Start all collections with descriptive logging
-        logger->info("Starting all log collections...");
-        for (const auto& [cmd, description] : commands) {
-            logger->info("[*] Starting " + description + " collection...");
-            int result = system(cmd.c_str());
-            if (result == 0) {
-                logger->info("[+] Successfully started " + description + " collection");
-            } else {
-                logger->error("[!] Failed to start " + description + " collection");
-            }
-        }
-        utils.collectLogsWithTimer();
-        // When Ctrl+C is pressed, stop all collections
-        logger->info("\nStopping all log collections...");
         
-        // Kill all collection processes
-        std::vector<std::pair<std::string, std::string>> killCommands = {
-            {"sudo pkill -f 'log stream.*com.cisco.anyconnect.macos.acsockext' || true", "KDF Logs"},
-            {"sudo killall tcpdump || true", "Packet Capture"},
-            {"sudo pkill -f 'log stream.*acnvmagent' || true", "NVM Logs"},
-            {"sudo pkill -f 'log stream.*acumbrellaagent' || true", "Umbrella Logs"},
-            {"sudo pkill -f 'log stream.*csc_iseagentd' || true", "ISE Posture Logs"},
-            {"sudo pkill -f 'log stream.*csc_zta_agent' || true", "ZTA Logs"}
-        };
-
-        // Stop each process with descriptive logging
-        for (const auto& [cmd, description] : killCommands) {
-            logger->info("Stopping " + description + " collection...");
-            int result = system(cmd.c_str());
-            if (result == 0) {
-                logger->info("[+] Successfully stopped " + description + " collection");
-            } else {
-                logger->warning("[!] Failed to stop " + description + " collection");
-            }
+        std::string kdfLogsPath = std::string(homeDir) + "/Desktop/kdf_logs.log";
+        
+        std::string cmd = "sudo log stream --predicate 'process == \"com.cisco.anyconnect.macos.acsockext\"' "
+                          "--style syslog > " + kdfLogsPath + " &";
+        
+        logger->info("[*] Starting KDF Logs collection...");
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully started KDF Logs collection");
+        } else {
+            logger->error("[!] Failed to start KDF Logs collection");
         }
-        logger->info("Logs have been saved to the Desktop");
+        
+        logger->info("KDF logs are being collected to: " + kdfLogsPath);
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
     }
     catch (const std::exception& e) {
-        logger->error("Error collecting logs: " + std::string(e.what()));
+        logger->error("Error collecting KDF logs: " + std::string(e.what()));
     }
 }
 
+/**
+ * @brief Stops KDF log collection
+ * @note Terminates log stream process for KDF
+ */
+void NVMLogCollectorMac::stopKdfLogs() {
+    try {
+        logger->info("Stopping KDF log collection...");
+        
+        std::string cmd = "sudo pkill -f 'log stream.*com.cisco.anyconnect.macos.acsockext' || true";
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully stopped KDF Logs collection");
+        } else {
+            logger->warning("[!] Failed to stop KDF Logs collection");
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error stopping KDF logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Collects NVM-specific logs on macOS
+ * @note Saves logs to Desktop/nvm_system_logs.log
+ * @note Uses log stream to capture NVM agent logs
+ */
+void NVMLogCollectorMac::collectNvmLogs() {
+    try {
+        logger->info("Starting NVM log collection...");
+        
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+        
+        std::string nvmLogsPath = std::string(homeDir) + "/Desktop/nvm_system_logs.log";
+        
+        std::string cmd = "sudo log stream --predicate 'process == \"acnvmagent\"' --style syslog > " + 
+                          nvmLogsPath + " &";
+        
+        logger->info("[*] Starting NVM System Logs collection...");
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully started NVM System Logs collection");
+        } else {
+            logger->error("[!] Failed to start NVM System Logs collection");
+        }
+        
+        logger->info("NVM logs are being collected to: " + nvmLogsPath);
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting NVM logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Stops NVM log collection
+ * @note Terminates log stream process for NVM
+ */
+void NVMLogCollectorMac::stopNvmLogs() {
+    try {
+        logger->info("Stopping NVM log collection...");
+        
+        std::string cmd = "sudo pkill -f 'log stream.*acnvmagent' || true";
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully stopped NVM Logs collection");
+        } else {
+            logger->warning("[!] Failed to stop NVM Logs collection");
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error stopping NVM logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Collects packet capture on macOS
+ * @note Saves capture to Desktop/PacketCapture.pcap
+ * @note Uses tcpdump for packet capture
+ */
+void NVMLogCollectorMac::collectPacketCapture() {
+    try {
+        logger->info("Starting packet capture...");
+        
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+        
+        std::string packetCapturePath = std::string(homeDir) + "/Desktop/PacketCapture.pcap";
+        
+        std::string cmd = "sudo tcpdump -w " + packetCapturePath + " &";
+        
+        logger->info("[*] Starting Packet Capture...");
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully started Packet Capture");
+        } else {
+            logger->error("[!] Failed to start Packet Capture");
+        }
+        
+        logger->info("Packet capture is being saved to: " + packetCapturePath);
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting packet capture: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Stops packet capture
+ * @note Terminates tcpdump process
+ */
+void NVMLogCollectorMac::stopPacketCapture() {
+    try {
+        logger->info("Stopping packet capture...");
+        
+        std::string cmd = "sudo killall tcpdump || true";
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully stopped Packet Capture");
+        } else {
+            logger->warning("[!] Failed to stop Packet Capture");
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error stopping packet capture: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Collects Umbrella/SWG logs on macOS
+ * @note Saves logs to Desktop/swg_umbrella_logs.log
+ * @note Uses log stream to capture Umbrella agent logs
+ */
+void NVMLogCollectorMac::collectUmbrellaLogs() {
+    try {
+        logger->info("Starting Umbrella/SWG log collection...");
+        
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+        
+        std::string umbrellaLogsPath = std::string(homeDir) + "/Desktop/swg_umbrella_logs.log";
+        
+        std::string cmd = "sudo log stream --predicate 'process == \"acumbrellaagent\"' --style syslog > " + 
+                          umbrellaLogsPath + " &";
+        
+        logger->info("[*] Starting Umbrella/SWG Logs collection...");
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully started Umbrella/SWG Logs collection");
+        } else {
+            logger->error("[!] Failed to start Umbrella/SWG Logs collection");
+        }
+        
+        logger->info("Umbrella/SWG logs are being collected to: " + umbrellaLogsPath);
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting Umbrella/SWG logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Stops Umbrella/SWG log collection
+ * @note Terminates log stream process for Umbrella
+ */
+void NVMLogCollectorMac::stopUmbrellaLogs() {
+    try {
+        logger->info("Stopping Umbrella/SWG log collection...");
+        
+        std::string cmd = "sudo pkill -f 'log stream.*acumbrellaagent' || true";
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully stopped Umbrella Logs collection");
+        } else {
+            logger->warning("[!] Failed to stop Umbrella Logs collection");
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error stopping Umbrella/SWG logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Collects ISE Posture logs on macOS
+ * @note Saves logs to Desktop/ise_posture_logs.log
+ * @note Uses log stream to capture ISE agent logs
+ */
+void NVMLogCollectorMac::collectIsePostureLogs() {
+    try {
+        logger->info("Starting ISE Posture log collection...");
+        
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+        
+        std::string isePostureLogsPath = std::string(homeDir) + "/Desktop/ise_posture_logs.log";
+        
+        std::string cmd = "sudo log stream --predicate 'process == \"csc_iseagentd\"' --style syslog > " + 
+                          isePostureLogsPath + " &";
+        
+        logger->info("[*] Starting ISE Posture Logs collection...");
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully started ISE Posture Logs collection");
+        } else {
+            logger->error("[!] Failed to start ISE Posture Logs collection");
+        }
+        
+        logger->info("ISE Posture logs are being collected to: " + isePostureLogsPath);
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting ISE Posture logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Stops ISE Posture log collection
+ * @note Terminates log stream process for ISE
+ */
+void NVMLogCollectorMac::stopIsePostureLogs() {
+    try {
+        logger->info("Stopping ISE Posture log collection...");
+        
+        std::string cmd = "sudo pkill -f 'log stream.*csc_iseagentd' || true";
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully stopped ISE Posture Logs collection");
+        } else {
+            logger->warning("[!] Failed to stop ISE Posture Logs collection");
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error stopping ISE Posture logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Collects ZTA logs on macOS
+ * @note Saves logs to Desktop/zta_logs.log
+ * @note Uses log stream to capture ZTA agent logs
+ */
+void NVMLogCollectorMac::collectZtaLogs() {
+    try {
+        logger->info("Starting ZTA log collection...");
+        
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            logger->error("Could not determine home directory");
+            return;
+        }
+        
+        std::string ztaLogsPath = std::string(homeDir) + "/Desktop/zta_logs.log";
+        
+        std::string cmd = "sudo log stream --predicate 'process == \"csc_zta_agent\"' --style syslog > " + 
+                          ztaLogsPath + " &";
+        
+        logger->info("[*] Starting ZTA Logs collection...");
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully started ZTA Logs collection");
+        } else {
+            logger->error("[!] Failed to start ZTA Logs collection");
+        }
+        
+        logger->info("ZTA logs are being collected to: " + ztaLogsPath);
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting ZTA logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Stops ZTA log collection
+ * @note Terminates log stream process for ZTA
+ */
+void NVMLogCollectorMac::stopZtaLogs() {
+    try {
+        logger->info("Stopping ZTA log collection...");
+        
+        std::string cmd = "sudo pkill -f 'log stream.*csc_zta_agent' || true";
+        int result = system(cmd.c_str());
+        
+        if (result == 0) {
+            logger->info("[+] Successfully stopped ZTA Logs collection");
+        } else {
+            logger->warning("[!] Failed to stop ZTA Logs collection");
+        }
+    }
+    catch (const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error stopping ZTA logs: " + std::string(e.what()));
+    }
+}
+
+/**
+ * @brief Displays a timer and waits for user to press Ctrl+C to stop collection
+ * @note Uses signal handler to catch SIGINT (Ctrl+C)
+ * @note Displays elapsed time in MM:SS format with real-time updates
+ * @note Sets g_stopCollection flag to true when interrupted
+ */
+void NVMLogCollectorMac::collectLogsWithTimer() {
+    try{
+        // Set up signal handler
+        signal(SIGINT, signalHandler);
+        g_stopCollection = false;
+        
+        // Start time
+        auto startTime = std::chrono::steady_clock::now();
+        int elapsedSeconds = 0;
+        
+        while (!g_stopCollection) {
+            auto currentTime = std::chrono::steady_clock::now();
+            elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>
+                            (currentTime - startTime).count();
+            
+            // Show elapsed time
+            std::cout << "\r\033[K" << "Time elapsed: " 
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds/60 << ":"
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds%60 
+                    << " (Press Ctrl+C to stop)" << std::flush;
+            
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+    catch(const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting logs with timer: " + std::string(e.what()));
+    }
+}
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
 /**
  * @brief Collects DART logs using the DART CLI tool
  * @note Saves the DART bundle to the user's Desktop
@@ -858,7 +1192,7 @@ void NVMLogCollectorMac::createAllFilesISEPosture() {
  * @note Removes debuglogs.json and v4debug.json files from specified directories
  *       Uses MacPaths constants for paths
  */
-void NVMLogCollectorMac::deleteAllfilesISEPosture() {
+void NVMLogCollectorMac::deleteAllFilesISEPosture() {
     try {
         logger->info("Removing all debug configuration files...");
 
@@ -1007,7 +1341,7 @@ void NVMLogCollectorMac::createAllFilesZTA(){
  * @note Removes logconfig.json and flags.json from the ZTA path
  *       Uses MacPaths constants for paths
  */
-void NVMLogCollectorMac::deleteAllfilesZTA(){
+void NVMLogCollectorMac::deleteAllFilesZTA(){
     try{
         // For ZTA logconfig.json
         std::string ztaPath6 = MacPaths::ZTA_PATH;
@@ -1033,36 +1367,5 @@ void NVMLogCollectorMac::deleteAllfilesZTA(){
         logger->error("Details: " + std::string(e.what()));
     }catch (const std::exception& e) {
         logger->error("Error deleting debug files: " + std::string(e.what()));
-    }
-}
-
-void NVMLogCollectorMac::collectkdflogsmac() {
-    try {
-        logger->info("Starting KDF log collection...");
-
-        // Get user's desktop path
-        const char* homeDir = getenv("HOME");
-        if (!homeDir) {
-            logger->error("Could not determine home directory");
-            return;
-        }
-
-        // Define log file path
-        std::string kdfLogsPath = std::string(homeDir) + "/Desktop/kdf_logs.log";
-        
-        // Create command for KDF log collection
-        std::string cmd = "sudo log stream --predicate 'process == \"com.cisco.anyconnect.macos.acsockext\"' "
-                          "--style syslog > " + kdfLogsPath + " &";
-        
-        // Start log collection
-        logger->info("Starting KDF logs collection...");
-        int result = system(cmd.c_str());
-    }
-    catch (const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error collecting KDF logs: " + std::string(e.what()));
     }
 }

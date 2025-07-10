@@ -24,6 +24,12 @@ public:
     //virtual void cleanup_logs(bool keep_source = false);
 
     virtual ~BaseCollector() = default;
+
+    virtual void findAllAgentProcesses() = 0;
+    virtual void collectLogsWithTimer() = 0;
+    virtual void LogCollectorFile() = 0;
+    virtual void organizeAndArchiveLogs() = 0;
+    virtual void collectDARTLogs() = 0;
 };
 
 #endif // BASE_COLLECTOR_H

@@ -12,10 +12,17 @@ namespace fs = std::filesystem;
 #include "../../Utils/Error.h"
 #include "../../Utils/Logger.h"
 #include "../../Utils/Common.h"
-// Declare the global signal status variable from main.cpp
+
 using namespace std;
 
-// Constructor implementation
+/**
+ * @brief Constructs a Linux NVM log collector with multiple module support
+ * @param config Configuration settings map for collector initialization
+ * @param logger Shared pointer to logger instance for output messages
+ * @param enable_debug_logs Optional flag to enable detailed debug logging (default: false)
+ * @param debug_level Optional debug verbosity level (default: 0)
+ * @note Initializes all collector modules (NVM, SWG, ISE, ZTA) and utilities
+ */
 NVMLogCollectorLinux::NVMLogCollectorLinux(const std::map<std::string, std::string>& config, 
     std::shared_ptr<Logger> logger,
     bool enable_debug_logs,
@@ -29,10 +36,19 @@ NVMLogCollectorLinux::NVMLogCollectorLinux(const std::map<std::string, std::stri
 
     logger->info("NVMCollectorLinux initialized with NVM and SWG support.");
 }
+
+/**
+ * @brief Destroys the Linux NVM log collector instance
+ * @note Logs destruction message before cleanup
+ */
 NVMLogCollectorLinux::~NVMLogCollectorLinux() {
     logger->info("NVMLogCollectorLinux destroyed");
 }
 
+/**
+ * @brief Retrieves the version of the NVM agent on Linux
+ * @note Executes the NVM agent binary with the `-v` flag to get the version
+ */
 void NVMLogCollectorLinux::get_nvm_version() {
     logger->info("Getting NVM agent version...");
     try {
@@ -73,16 +89,37 @@ void NVMLogCollectorLinux::get_nvm_version() {
     }
 }
 
-
+/**
+ * @brief Writes the debug configuration file for the NVM agent
+ * @note Uses the utility function to write the debug configuration
+ * @param LinuxPaths::DEBUG_CONF Path to the debug configuration file
+ */
 void NVMLogCollectorLinux::writeDebugConf() {
     utils.writeDebugConfSystem(LinuxPaths::DEBUG_CONF);
 }
+
+/**
+ * @brief Removes the debug configuration file for the NVM agent
+ * @note Uses the utility function to remove the debug configuration
+ * @param LinuxPaths::DEBUG_CONF Path to the debug configuration file
+ */
 void NVMLogCollectorLinux::removeDebugConf() {
     utils.removeDebugConfSystem(LinuxPaths::DEBUG_CONF);
 }
+
+/**
+ * @brief Adds a troubleshoot tag to the NVM service profile
+ * @note Uses the utility function to modify the service profile
+ * @param LinuxPaths::SERVICE_PROFILE Path to the NVM service profile
+ */
 void NVMLogCollectorLinux::addTroubleshootTag() {
     utils.addTroubleshootTagSystem(LinuxPaths::SERVICE_PROFILE);
 }
+
+/**
+ * @brief Creates a backup of the NVM service profile
+ * @note Copies the service profile to a backup file in the NVM path
+ */
 void NVMLogCollectorLinux::backupServiceProfile() {
     try {
         logger->info("Creating backup of NVM_ServiceProfile.xml...");
@@ -107,6 +144,11 @@ void NVMLogCollectorLinux::backupServiceProfile() {
         logger->error("Error creating backup: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Restores the NVM service profile from a backup
+ * @note Copies the backup file back to the service profile path
+ */
 void NVMLogCollectorLinux::restoreServiceProfile() {
     try {
         logger->info("Restoring NVM_ServiceProfile.xml from backup...");
@@ -145,6 +187,16 @@ void NVMLogCollectorLinux::restoreServiceProfile() {
         logger->error("Error restoring service profile: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Finds, stops and restarts all agent processes (NVM, ISE, ZTA)
+ * @details Searches for running processes, captures their PIDs, terminates them,
+ *          then restarts them using appropriate paths from LinuxPaths namespace
+ * @note Requires sudo privileges for process management operations
+ * @note Uses ps, kill, and process restart commands
+ * @note Uses `ps -ef` to list processes and `grep` to filter for specific agents
+ * @note Terminates processes using `kill -9` if their PIDs are found
+ */
 void NVMLogCollectorLinux::findAllAgentProcesses(){
     try{
         logger->info("Searching for NVM agent processes in Linux...");
@@ -330,6 +382,12 @@ void NVMLogCollectorLinux::findAllAgentProcesses(){
         logger->error("Error finding NVM agent processes: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Sets the KDF debug level on Linux.
+ * @note Prompts the user to enter a debug level (0-7) and applies it using `sysctl`.
+ * @details Logs the selected debug mode and validates the input.
+ */
 void NVMLogCollectorLinux::setKDFDebugFlag() {
     logger->info("Setting KDF debug level...");
     int debugLevel;
@@ -391,6 +449,12 @@ void NVMLogCollectorLinux::setKDFDebugFlag() {
         logger->error("[!] Error setting KDF debug level: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Resets the KDF debug level to 0 (disabled).
+ * @note Uses `sysctl` to disable debug mode for KDF.
+ * @details Logs the success or failure of the operation.
+ */
 void NVMLogCollectorLinux::clearKDFDebugFlag() {
     logger->info("[*] Resetting KDF debug flag to disable debug mode...");
     
@@ -415,6 +479,12 @@ void NVMLogCollectorLinux::clearKDFDebugFlag() {
         logger->error("[!] Error resetting KDF debug level: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Collects DART logs and saves them as a zip file on the Desktop.
+ * @note Executes the DART CLI tool to generate the logs.
+ * @details Logs the success or failure of the collection process.
+ */
 void NVMLogCollectorLinux::collectDARTLogs() {
     try{
         logger->info("Starting DART log collection...");
@@ -452,103 +522,55 @@ void NVMLogCollectorLinux::collectDARTLogs() {
         logger->error("Error collecting DART logs: " + std::string(e.what()));
     }
 }
-void NVMLogCollectorLinux::collectAllLogsSimultaneously() {
+/**
+ * @brief Displays a timer and waits for user to press Ctrl+C to stop collection
+ * @note Uses signal handler to catch SIGINT (Ctrl+C)
+ * @note Displays elapsed time in MM:SS format with real-time updates
+ * @note Sets g_stopCollection flag to true when interrupted
+ */
+void NVMLogCollectorLinux::collectLogsWithTimer() {
     try{
-        logger->info("Starting all log collections simultaneously...");
-        logger->info("Press Ctrl+C to stop all collections when ready");
-
-        const char* homeDir = getenv("HOME");
-        if (!homeDir) {
-            logger->error("Could not determine home directory");
-            return;
-        }
-
-        // Define paths for different log files
-        std::string kdfLogsPath = std::string(homeDir) + "/Desktop/kdf_logs.log";
-        std::string nvmLogsPath = std::string(homeDir) + "/Desktop/nvm_system_logs.log";
-        std::string packetCapturePath = std::string(homeDir) + "/Desktop/PacketCapture.pcap";
-        std::string isePostureLogsPath = std::string(homeDir) + "/Desktop/ise_posture_logs.log";
-        std::string ztaLogsPath = std::string(homeDir) + "/Desktop/zta_logs.log";
-        // Create a vector of pairs containing both command and description
-        std::vector<std::pair<std::string, std::string>> commands = {
-            {
-                "sudo dmesg -wT | grep -i -E 'kdf|anyconnect|nvm' | tee -a " + kdfLogsPath + " &",
-                "KDF Logs"
-            },
-            {
-                "sudo tail /var/log/syslog -f | grep -i \"nvm\" > " + 
-                nvmLogsPath + " &",
-                "NVM System Logs"
-            },
-            {
-                "sudo tcpdump -w"  + packetCapturePath + " & ",
-                "Packet Capture"
-            },
-            {
-                "sudo tail /var/log/syslog -f | grep -i \"posture\" > " + 
-                isePostureLogsPath + " &",
-                "ISE Posture Logs"
-            },
-            {
-                "sudo tail /var/log/syslog -f | grep -i \"zta\" > " + 
-                ztaLogsPath+ " &",
-                "ZTA Logs"
-            },
-        };
-
-        // Start all collections with descriptive logging
-        logger->info("Starting all log collections...");
-        for (const auto& [cmd, description] : commands) {
-            logger->info("[*] Starting " + description + " collection...");
-            int result = system(cmd.c_str());
-            if (result == 0) {
-                logger->info("[+] Successfully started " + description + " collection");
-            } else {
-                logger->error("[!] Failed to start " + description + " collection");
-            }
-        }
-        utils.collectLogsWithTimer();
-        // When Ctrl+C is pressed, stop all collections
-        logger->info("\nStopping all log collections...");
+        // Set up signal handler
+        signal(SIGINT, signalHandler);
+        g_stopCollection = false;
         
-        // Kill all collection processes
-        std::vector<std::pair<std::string, std::string>> stopCommands = {
-            {
-                "sudo pkill -f 'dmesg -wT.*grep.*kdf|anyconnect|nvm' || true",
-                "KDF Logs"
-            },
-            {
-                "sudo pkill -f 'tail.*syslog.*grep.*nvm' || true",
-                "NVM System Logs"
-            },
-            {
-                "sudo killall tcpdump || true",
-                "Packet Capture"
-            },
-            {
-                "sudo pkill -f 'tail.*syslog.*grep.*posture' || true",
-                "ISE Posture Logs"
-            },
-            {
-                "sudo pkill -f 'tail.*syslog.*grep.*zta' || true",
-                "ZTA Logs"
-            }
-        };
-
-        // Stop each process with descriptive logging
-        for (const auto& [cmd, description] : stopCommands) {
-            logger->info("Stopping " + description + " collection...");
-            int result = system(cmd.c_str());
+        // Start time
+        auto startTime = std::chrono::steady_clock::now();
+        int elapsedSeconds = 0;
+        
+        while (!g_stopCollection) {
+            auto currentTime = std::chrono::steady_clock::now();
+            elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>
+                            (currentTime - startTime).count();
+            
+            // Show elapsed time
+            std::cout << "\r\033[K" << "Time elapsed: " 
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds/60 << ":"
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds%60 
+                    << " (Press Ctrl+C to stop)" << std::flush;
+            
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
-        logger->info("Logs have been saved to the Desktop");
-    }catch (const LogCollectorError& e) {
+    }
+    catch(const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
-    } 
+    }
     catch (const std::exception& e) {
-        logger->error("Error collecting logs: " + std::string(e.what()));
+        logger->error("Error collecting logs with timer: " + std::string(e.what()));
     }
 }
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+
+/**
+ * @brief Clears the `logcollector.log` file in the current build directory.
+ * @note Ensures the log file is reset before starting a new collection.
+ * @details Checks if the file exists and truncates it if necessary.
+ */
 void NVMLogCollectorLinux::LogCollectorFile() {
     try {
         // Get the current build directory path
@@ -569,6 +591,12 @@ void NVMLogCollectorLinux::LogCollectorFile() {
         return ;
     }
 }
+
+/**
+ * @brief Organizes collected logs into a directory and creates a zip archive.
+ * @note Moves logs to a dedicated folder and compresses them with a timestamp.
+ * @details Cleans up temporary files after archiving.
+ */
 void NVMLogCollectorLinux::organizeAndArchiveLogs() {
     try{
         logger->info("Organizing and archiving collected logs...");
@@ -645,6 +673,12 @@ void NVMLogCollectorLinux::organizeAndArchiveLogs() {
         logger->error("Error organizing and archiving logs: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates necessary debug files for ISE posture logs.
+ * @note Checks for required directories and creates `debuglogs.json` and `v4debug.json`.
+ * @details Logs the success or failure of file creation.
+ */
 void NVMLogCollectorLinux::createAllFilesISEPosture() {
     try {
         logger->info("Checking and creating debug files for ISE and ZTA modules...");
@@ -772,6 +806,12 @@ void NVMLogCollectorLinux::createAllFilesISEPosture() {
         logger->error("Error creating debug files: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Deletes debug files for ISE posture logs if they exist.
+ * @note Removes `debuglogs.json` and `v4debug.json` from their respective paths.
+ * @details Logs the success or failure of the deletion process.
+ */
 void NVMLogCollectorLinux::deleteAllFilesISEPosture() {
     try {
         logger->info("Removing debug configuration files if they exist...");
@@ -886,6 +926,12 @@ void NVMLogCollectorLinux::deleteAllFilesISEPosture() {
         logger->error("Error deleting debug files: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates necessary debug files for ZTA logs.
+ * @note Creates `logconfig.json` and `flags.json` in the ZTA directory.
+ * @details Logs the success or failure of file creation.
+ */
 void NVMLogCollectorLinux::createAllFilesZTA() {
     try{
          // Declare these variables at the beginning of the function
@@ -995,6 +1041,12 @@ void NVMLogCollectorLinux::createAllFilesZTA() {
         logger->error("Error deleting debug files: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Deletes debug files for ZTA logs if they exist.
+ * @note Removes `logconfig.json` and `flags.json` from the ZTA directory.
+ * @details Logs the success or failure of the deletion process.
+ */
 void NVMLogCollectorLinux::deleteAllFilesZTA(){
     try{
         // Declare these variables at the beginning of the function
@@ -1065,5 +1117,217 @@ void NVMLogCollectorLinux::deleteAllFilesZTA(){
         logger->error("Details: " + std::string(e.what()));
     } catch (const std::exception& e) {
         logger->error("Error deleting debug files: " + std::string(e.what()));
+    }
+}
+void NVMLogCollectorLinux::createSWGConfigOverride(){
+
+}
+void NVMLogCollectorLinux::deleteSWGConfigOverride(){
+
+}
+
+/**
+ * @brief Starts the collection of KDF logs on Linux.
+ * @note Uses `dmesg` with filters to capture logs and saves them to the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::collectKdfLogs() {
+    const char* homeDir = getenv("HOME");
+    if (!homeDir) {
+        logger->error("Could not determine home directory");
+        return;
+    }
+    std::string kdfLogsPath = std::string(homeDir) + "/Desktop/kdf_logs.log";
+    std::string cmd = "sudo dmesg -wT | grep -i -E 'kdf|anyconnect|nvm' | tee -a " + kdfLogsPath + " &";
+    logger->info("[*] Starting KDF Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started KDF Logs collection");
+    } else {
+        logger->error("[!] Failed to start KDF Logs collection");
+    }
+}
+
+/**
+ * @brief Starts the collection of Umbrella logs on Linux.
+ * @note Placeholder function for Umbrella log collection.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::collectUmbrellaLogs(){}
+
+/**
+ * @brief Starts the collection of NVM system logs on Linux.
+ * @note Uses `tail` with filters to capture logs from `/var/log/syslog`.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::collectNvmLogs() {
+    const char* homeDir = getenv("HOME");
+    if (!homeDir) {
+        logger->error("Could not determine home directory");
+        return;
+    }
+    std::string nvmLogsPath = std::string(homeDir) + "/Desktop/nvm_system_logs.log";
+    std::string cmd = "sudo tail /var/log/syslog -f | grep -i \"nvm\" > " + nvmLogsPath + " &";
+    logger->info("[*] Starting NVM System Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started NVM System Logs collection");
+    } else {
+        logger->error("[!] Failed to start NVM System Logs collection");
+    }
+}
+
+/**
+ * @brief Starts a packet capture on Linux.
+ * @note Uses `tcpdump` to capture packets and saves them as a `.pcap` file on the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::collectPacketCapture() {
+    const char* homeDir = getenv("HOME");
+    if (!homeDir) {
+        logger->error("Could not determine home directory");
+        return;
+    }
+    std::string packetCapturePath = std::string(homeDir) + "/Desktop/PacketCapture.pcap";
+    std::string cmd = "sudo tcpdump -w " + packetCapturePath + " &";
+    logger->info("[*] Starting Packet Capture collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started Packet Capture collection");
+    } else {
+        logger->error("[!] Failed to start Packet Capture collection");
+    }
+}
+
+/**
+ * @brief Starts the collection of ISE posture logs on Linux.
+ * @note Uses `tail` with filters to capture logs from `/var/log/syslog`.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::collectIsePostureLogs() {
+    const char* homeDir = getenv("HOME");
+    if (!homeDir) {
+        logger->error("Could not determine home directory");
+        return;
+    }
+    std::string isePostureLogsPath = std::string(homeDir) + "/Desktop/ise_posture_logs.log";
+    std::string cmd = "sudo tail /var/log/syslog -f | grep -i \"posture\" > " + isePostureLogsPath + " &";
+    logger->info("[*] Starting ISE Posture Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started ISE Posture Logs collection");
+    } else {
+        logger->error("[!] Failed to start ISE Posture Logs collection");
+    }
+}
+
+/**
+ * @brief Starts the collection of ZTA logs on Linux.
+ * @note Uses `tail` with filters to capture logs from `/var/log/syslog`.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::collectZtaLogs() {
+    const char* homeDir = getenv("HOME");
+    if (!homeDir) {
+        logger->error("Could not determine home directory");
+        return;
+    }
+    std::string ztaLogsPath = std::string(homeDir) + "/Desktop/zta_logs.log";
+    std::string cmd = "sudo tail /var/log/syslog -f | grep -i \"zta\" > " + ztaLogsPath + " &";
+    logger->info("[*] Starting ZTA Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started ZTA Logs collection");
+    } else {
+        logger->error("[!] Failed to start ZTA Logs collection");
+    }
+}
+
+/**
+ * @brief Stops the collection of KDF logs on Linux.
+ * @note Uses `pkill` to terminate the `dmesg` command capturing KDF logs.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::stopKdfLogs() {
+    std::string cmd = "sudo pkill -f 'dmesg -wT.*grep.*kdf|anyconnect|nvm' || true";
+    logger->info("Stopping KDF Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully stopped KDF Logs collection");
+    } else {
+        logger->error("[!] Failed to stop KDF Logs collection");
+    }
+}
+
+/**
+ * @brief Stops the collection of NVM system logs on Linux.
+ * @note Uses `pkill` to terminate the `tail` command capturing NVM logs.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::stopNvmLogs() {
+    std::string cmd = "sudo pkill -f 'tail.*syslog.*grep.*nvm' || true";
+    logger->info("Stopping NVM System Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully stopped NVM System Logs collection");
+    } else {
+        logger->error("[!] Failed to stop NVM System Logs collection");
+    }
+}
+
+/**
+ * @brief Stops the collection of Umbrella logs on Linux.
+ * @note Placeholder function for stopping Umbrella log collection.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::stopUmbrellaLogs(){
+}
+
+/**
+ * @brief Stops the packet capture on Linux.
+ * @note Uses `killall` to terminate the `tcpdump` process capturing packets.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::stopPacketCapture() {
+    std::string cmd = "sudo killall tcpdump || true";
+    logger->info("Stopping Packet Capture collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully stopped Packet Capture collection");
+    } else {
+        logger->error("[!] Failed to stop Packet Capture collection");
+    }
+}
+
+
+/**
+ * @brief Stops the collection of ISE posture logs on Linux.
+ * @note Uses `pkill` to terminate the `tail` command capturing ISE posture logs.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::stopIsePostureLogs() {
+    std::string cmd = "sudo pkill -f 'tail.*syslog.*grep.*posture' || true";
+    logger->info("Stopping ISE Posture Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully stopped ISE Posture Logs collection");
+    } else {
+        logger->error("[!] Failed to stop ISE Posture Logs collection");
+    }
+}
+
+/**
+ * @brief Stops the collection of ZTA logs on Linux.
+ * @note Uses `pkill` to terminate the `tail` command capturing ZTA logs.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorLinux::stopZtaLogs() {
+    std::string cmd = "sudo pkill -f 'tail.*syslog.*grep.*zta' || true";
+    logger->info("Stopping ZTA Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully stopped ZTA Logs collection");
+    } else {
+        logger->error("[!] Failed to stop ZTA Logs collection");
     }
 }

@@ -19,24 +19,47 @@ public:
                       bool enable_debug_logs = false,
                       int debug_level = 0);
     ~NVMLogCollectorLinux();
-    void get_nvm_version();
-    void writeDebugConf();
-    void backupServiceProfile();
-    void addTroubleshootTag();
-    void restoreServiceProfile();
-    void removeDebugConf();
-    void setKDFDebugFlag();
-    void clearKDFDebugFlag();
-    void findAllAgentProcesses();
-    void collectDARTLogs();
-    void collectAllLogsSimultaneously();
-    void collectLogsWithTimer();
-    void LogCollectorFile();
-    void createAllFilesISEPosture();
-    void deleteAllFilesISEPosture();
-    void createAllFilesZTA();
-    void deleteAllFilesZTA();
-    void organizeAndArchiveLogs();
+    // Implement BaseCollector functions
+    void findAllAgentProcesses() override;
+    void collectLogsWithTimer() override;
+    void LogCollectorFile() override;
+    void organizeAndArchiveLogs() override;
+    void collectDARTLogs() override;
+
+    // Implement NVMLogCollector functions
+    // NVM configuration functions
+    void get_nvm_version() override;
+    void writeDebugConf() override;
+    void removeDebugConf() override;
+    void backupServiceProfile() override;
+    void restoreServiceProfile() override;
+    void addTroubleshootTag() override;
+    void setKDFDebugFlag() override;
+    void clearKDFDebugFlag() override;
+    void collectKdfLogs() override;
+    void stopKdfLogs() override;
+    void collectNvmLogs() override;
+    void stopNvmLogs() override;
+    void collectPacketCapture() override;
+    void stopPacketCapture() override;
+
+    // Implement SWGLogCollector functions
+    void createSWGConfigOverride() override;
+    void deleteSWGConfigOverride() override;
+    void collectUmbrellaLogs() override;
+    void stopUmbrellaLogs() override;
+
+    // Implement ISEPostureCollector functions
+    void createAllFilesISEPosture() override;
+    void deleteAllFilesISEPosture() override;
+    void collectIsePostureLogs() override;
+    void stopIsePostureLogs() override;
+
+    // Implement ZTACollector functions
+    void createAllFilesZTA() override;
+    void deleteAllFilesZTA() override;
+    void collectZtaLogs() override;
+    void stopZtaLogs() override;
 };
 
 #endif // LINUX_COLLECTOR_H

@@ -20,9 +20,17 @@ namespace fs = std::filesystem;
     #define POPEN popen
     #define PCLOSE pclose
 #endif
-// Declare the global signal status variable from main.cpp
+
 using namespace std;
-// Constructor implementation
+
+/**
+ * @brief Constructs a Windows NVM log collector with multiple module support.
+ * @param config Configuration settings map for collector initialization.
+ * @param logger Shared pointer to logger instance for output messages.
+ * @param enable_debug_logs Optional flag to enable detailed debug logging (default: false).
+ * @param debug_level Optional debug verbosity level (default: 0).
+ * @note Initializes all collector modules (NVM, SWG, ISE, ZTA) and utilities.
+ */
 NVMLogCollectorWindows::NVMLogCollectorWindows(const std::map<std::string, std::string>& config, 
     std::shared_ptr<Logger> logger,
     bool enable_debug_logs,
@@ -34,11 +42,22 @@ NVMLogCollectorWindows::NVMLogCollectorWindows(const std::map<std::string, std::
     ZTACollector(config, logger),
     utils(logger) {
 
-    logger->info("NVMCollectorLinux initialized with NVM and SWG support.");
+    logger->info("NVMCollectorWindows initialized with NVM and SWG support.");
 }
+
+/**
+ * @brief Destroys the Windows NVM log collector instance.
+ * @note Logs a destruction message before cleanup.
+ */
 NVMLogCollectorWindows::~NVMLogCollectorWindows() {
     logger->info("NVMLogCollectorWindows destroyed");
 }
+
+/**
+ * @brief Retrieves the version of the NVM agent on Windows.
+ * @note Executes the NVM agent binary with the `-v` flag and parses the output.
+ * @details Logs the version or any errors encountered during the process.
+ */
 void NVMLogCollectorWindows::get_nvm_version() {
     logger->info("Getting NVM agent version...");
     try {
@@ -134,31 +153,71 @@ void NVMLogCollectorWindows::get_nvm_version() {
         nvm_version = "error";
     }
 }
+
 // Write the debug flag to nvm_dbg.conf
+/**
+ * @brief Writes the debug configuration file for the NVM agent.
+ * @note Uses the utility function to write the debug configuration to `nvm_dbg.conf`.
+ */
 void NVMLogCollectorWindows::writeDebugConf() {
     utils.writeDebugConfSystem(WinPaths::DEBUG_CONF);
 }
+
+/**
+ * @brief Removes the debug configuration file for the NVM agent.
+ * @note Uses the utility function to delete `nvm_dbg.conf`.
+ */
 void NVMLogCollectorWindows::removeDebugConf() {
     utils.removeDebugConfSystem(WinPaths::DEBUG_CONF);
 }
+
+/**
+ * @brief Adds a troubleshoot tag to the NVM service profile.
+ * @note Uses the utility function to modify the service profile file.
+ */
 void NVMLogCollectorWindows::addTroubleshootTag() {
     utils.addTroubleshootTagSystem(WinPaths::SERVICE_PROFILE);
 }
+
+/**
+ * @brief Sets the KDF debug flag on Windows.
+ * @note Prompts the user for a hexadecimal debug flag and applies it using `acsocktool`.
+ */
 void NVMLogCollectorWindows::setKDFDebugFlag() {
     string hexInput;
     logger->info("\nEnter debug flag (hexadecimal, e.g., 0x20): ");
     cin >> hexInput;
     utils.setKDFDebugFlagSystem(WinPaths::ACSOCKTOOL,hexInput);  
 }
+
+/**
+ * @brief Clears the KDF debug flag on Windows.
+ * @note Uses `acsocktool` to reset the debug flag to its default state.
+ */
 void NVMLogCollectorWindows::clearKDFDebugFlag() {
     utils.clearKDFDebugFlagSystem(WinPaths::ACSOCKTOOL);
 }
+
+/**
+ * @brief Creates a configuration override for the SWG module.
+ * @note Uses the utility function to create the override in the Umbrella path.
+ */
 void NVMLogCollectorWindows::createSWGConfigOverride() {
     utils.createSWGConfigOverrideSystem(WinPaths::UMBRELLA_PATH);
 }
+
+/**
+ * @brief Deletes the configuration override for the SWG module.
+ * @note Uses the utility function to remove the override from the Umbrella path.
+ */
 void NVMLogCollectorWindows::deleteSWGConfigOverride() {
     utils.deleteSWGConfigOverrideSystem(WinPaths::UMBRELLA_PATH);
 }
+
+/**
+ * @brief Creates a backup of the NVM service profile.
+ * @note Copies `NVM_ServiceProfile.xml` to a `.bak` file in the same directory.
+ */
 void NVMLogCollectorWindows::backupServiceProfile() {
     try{
         logger->info("Creating backup of NVM_ServiceProfile.xml...");
@@ -177,6 +236,11 @@ void NVMLogCollectorWindows::backupServiceProfile() {
         logger->error("Error creating backup of NVM_ServiceProfile.xml: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Restores the NVM service profile from a backup.
+ * @note Copies the `.bak` file back to `NVM_ServiceProfile.xml`.
+ */
 void NVMLogCollectorWindows::restoreServiceProfile() {
     try{
         logger->info("Restoring NVM_ServiceProfile.xml from backup...");
@@ -197,6 +261,12 @@ void NVMLogCollectorWindows::restoreServiceProfile() {
         logger->error("Error restoring NVM_ServiceProfile.xml: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Searches for and terminates agent processes (NVM, Umbrella, ISE, ZTA) on Windows.
+ * @note Uses `tasklist` to find processes and `taskkill` to terminate them by PID.
+ * @details Logs the results of the search and termination attempts.
+ */
 void NVMLogCollectorWindows::findAllAgentProcesses() {
     try{
         logger->info("Searching for NVM agent processes...");
@@ -479,111 +549,117 @@ void NVMLogCollectorWindows::findAllAgentProcesses() {
     }
 }
 // Combined log collection function
-void NVMLogCollectorWindows::collectAllLogsSimultaneously() {
-    try{
-        logger->info("Starting unified log collection (KDF, Packet Capture, NVM System, Umbrella)...");
+// void NVMLogCollectorWindows::collectAllLogsSimultaneously() {
+//     try{
+//         logger->info("Starting unified log collection (KDF, Packet Capture, NVM System, Umbrella)...");
     
-        // Get user's profile path
-        std::string userProfilePath = getUserProfilePath();
-        if (userProfilePath.empty()) {
-            logger->error("Could not determine user profile directory");
-            return;
-        }
-        // Create paths for all log files
-        std::string kdfLogPath = userProfilePath + "\\Desktop\\kdf_logs" + ".log";
-        std::string etlPath = userProfilePath + "\\Desktop\\PacketCapture" + ".etl";
-        std::string pcapPath = userProfilePath + "\\Desktop\\packetCapture" + ".pcap";
-        std::string nvmLogPath = userProfilePath + "\\Desktop\\nvm_system_logs" + ".log";
-        std::string umbrellaLogPath = userProfilePath + "\\Desktop\\swg_umbrella_logs" + ".log";
-        std::string isePostureLogPath = userProfilePath + "\\Desktop\\ise_posture_logs" + ".log";
-        std::string ztaLogPath = userProfilePath + "\\Desktop\\zta_logs" + ".log";
-        std::string debugViewPath = userProfilePath + "\\Downloads\\Debugview\\Dbgview.exe";
+//         // Get user's profile path
+//         std::string userProfilePath = getUserProfilePath();
+//         if (userProfilePath.empty()) {
+//             logger->error("Could not determine user profile directory");
+//             return;
+//         }
+//         // Create paths for all log files
+//         std::string kdfLogPath = userProfilePath + "\\Desktop\\kdf_logs" + ".log";
+//         std::string etlPath = userProfilePath + "\\Desktop\\PacketCapture" + ".etl";
+//         std::string pcapPath = userProfilePath + "\\Desktop\\packetCapture" + ".pcap";
+//         std::string nvmLogPath = userProfilePath + "\\Desktop\\nvm_system_logs" + ".log";
+//         std::string umbrellaLogPath = userProfilePath + "\\Desktop\\swg_umbrella_logs" + ".log";
+//         std::string isePostureLogPath = userProfilePath + "\\Desktop\\ise_posture_logs" + ".log";
+//         std::string ztaLogPath = userProfilePath + "\\Desktop\\zta_logs" + ".log";
+//         std::string debugViewPath = userProfilePath + "\\Downloads\\Debugview\\Dbgview.exe";
         
-        // Debug output to verify paths
-        logger->info("Debug info - userProfilePath: " + userProfilePath);
-        logger->info("Debug info - KDF log path: " + kdfLogPath);
-        logger->info("Debug info - ETL capture path: " + etlPath);
-        logger->info("Debug info - PCAP output path: " + pcapPath);
-        logger->info("Debug info - NVM system log path: " + nvmLogPath);
-        logger->info("Debug info - Umbrella log path: " + umbrellaLogPath);
-        logger->info("Debug info - DebugView path: " + debugViewPath);
-        std::vector<std::pair<std::string, std::string>> commands = {
-            {
-                "start \"KDF Log Collection\" \"" + debugViewPath + "\" /k /v /om /l \"" + kdfLogPath + "\"",
-                "KDF Logs"
-            },
-            {
-                "wevtutil qe \"Cisco Secure Client - Network Visibility Module\" /f:text > \"" + nvmLogPath + "\"",
-                "NVM System Logs"
-            },
-            {
-                "pktmon start --capture --file-name \"" + etlPath + "\"",
-                "Packet Capture"
-            },
-            {
-                "wevtutil qe \"Cisco Secure Client - Umbrella\" /f:text > \"" + umbrellaLogPath + "\"",
-                "Umbrella/SWG Logs"
-            },
-            {
-                "wevtutil qe \"Cisco Secure Client - ISE Posture\" /f:text > \"" + isePostureLogPath + "\"",
-                "NVM System Logs"
-            },
-            {
-                "wevtutil qe \"Cisco Secure Client - Zero Trust Access\" /f:text > \"" + ztaLogPath + "\"",
-                "NVM System Logs"
-            },
-        };
-        // Start all collections with descriptive logging
-        logger->info("Starting all log collections...");
-        for (const auto& [cmd, description] : commands) {
-            logger->info("[*] Starting " + description + " collection...");
-            int result = system(cmd.c_str());
-            if (result == 0) {
-                logger->info("[+] Successfully started " + description + " collection");
-            } else {
-                logger->error("[!] Failed to start " + description + " collection");
-            }
-        }
-        utils.collectLogsWithTimer();
-        std::vector<std::pair<std::string, std::string>> killCommands = {
-            {"taskkill /F /IM Dbgview.exe > nul 2>&1", "KDF Logs"},
-            //{"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*NVM*\" > nul 2>&1", "NVM System Logs"},
-            {"pktmon stop", "Packet Capture"}
-            // {"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*ISE*\" > nul 2>&1", "ISE Posture Logs"},
-            // {"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*Zero Trust*\" > nul 2>&1", "ZTA Logs"}
-            //{"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*Umbrella*\" > nul 2>&1", "Umbrella/SWG Logs"}
-        };
-        // Stop each process with descriptive logging    
-        logger->info("\nStopping all log collections...");
-        for (const auto& [cmd, description] : killCommands) {
-            logger->info("Stopping " + description + " collection...");
-            int result = system(cmd.c_str());
-            if (result == 0) {
-                logger->info("[+] Successfully stopped " + description + " collection");
-            } else {
-                logger->warning("[!] Failed to stop " + description + " collection");
-            }
-        }
-        logger->info("Logs have been saved to the Desktop");
-        logger->info("Converting ETL file to PCAP format...");
-        std::string convertCmd = "pktmon etl2pcap \"" + etlPath + "\" -o \"" + pcapPath + "\"";
-        logger->info("Executing conversion command: " + convertCmd);
+//         // Debug output to verify paths
+//         logger->info("Debug info - userProfilePath: " + userProfilePath);
+//         logger->info("Debug info - KDF log path: " + kdfLogPath);
+//         logger->info("Debug info - ETL capture path: " + etlPath);
+//         logger->info("Debug info - PCAP output path: " + pcapPath);
+//         logger->info("Debug info - NVM system log path: " + nvmLogPath);
+//         logger->info("Debug info - Umbrella log path: " + umbrellaLogPath);
+//         logger->info("Debug info - DebugView path: " + debugViewPath);
+//         std::vector<std::pair<std::string, std::string>> commands = {
+//             {
+//                 "start \"KDF Log Collection\" \"" + debugViewPath + "\" /k /v /om /l \"" + kdfLogPath + "\"",
+//                 "KDF Logs"
+//             },
+//             {
+//                 "wevtutil qe \"Cisco Secure Client - Network Visibility Module\" /f:text > \"" + nvmLogPath + "\"",
+//                 "NVM System Logs"
+//             },
+//             {
+//                 "pktmon start --capture --file-name \"" + etlPath + "\"",
+//                 "Packet Capture"
+//             },
+//             {
+//                 "wevtutil qe \"Cisco Secure Client - Umbrella\" /f:text > \"" + umbrellaLogPath + "\"",
+//                 "Umbrella/SWG Logs"
+//             },
+//             {
+//                 "wevtutil qe \"Cisco Secure Client - ISE Posture\" /f:text > \"" + isePostureLogPath + "\"",
+//                 "NVM System Logs"
+//             },
+//             {
+//                 "wevtutil qe \"Cisco Secure Client - Zero Trust Access\" /f:text > \"" + ztaLogPath + "\"",
+//                 "NVM System Logs"
+//             },
+//         };
+//         // Start all collections with descriptive logging
+//         logger->info("Starting all log collections...");
+//         for (const auto& [cmd, description] : commands) {
+//             logger->info("[*] Starting " + description + " collection...");
+//             int result = system(cmd.c_str());
+//             if (result == 0) {
+//                 logger->info("[+] Successfully started " + description + " collection");
+//             } else {
+//                 logger->error("[!] Failed to start " + description + " collection");
+//             }
+//         }
+//         utils.collectLogsWithTimer();
+//         std::vector<std::pair<std::string, std::string>> killCommands = {
+//             {"taskkill /F /IM Dbgview.exe > nul 2>&1", "KDF Logs"},
+//             //{"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*NVM*\" > nul 2>&1", "NVM System Logs"},
+//             {"pktmon stop", "Packet Capture"}
+//             // {"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*ISE*\" > nul 2>&1", "ISE Posture Logs"},
+//             // {"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*Zero Trust*\" > nul 2>&1", "ZTA Logs"}
+//             //{"taskkill /F /FI \"WINDOWTITLE eq *wevtutil*Umbrella*\" > nul 2>&1", "Umbrella/SWG Logs"}
+//         };
+//         // Stop each process with descriptive logging    
+//         logger->info("\nStopping all log collections...");
+//         for (const auto& [cmd, description] : killCommands) {
+//             logger->info("Stopping " + description + " collection...");
+//             int result = system(cmd.c_str());
+//             if (result == 0) {
+//                 logger->info("[+] Successfully stopped " + description + " collection");
+//             } else {
+//                 logger->warning("[!] Failed to stop " + description + " collection");
+//             }
+//         }
+//         logger->info("Logs have been saved to the Desktop");
+//         logger->info("Converting ETL file to PCAP format...");
+//         std::string convertCmd = "pktmon etl2pcap \"" + etlPath + "\" -o \"" + pcapPath + "\"";
+//         logger->info("Executing conversion command: " + convertCmd);
             
-        int convertResult = system(convertCmd.c_str());
-        if (convertResult == 0) {
-            logger->info("Successfully converted ETL to PCAP format");
-            logger->info("PCAP file saved to: " + pcapPath);
-        } else {
-            logger->error("Failed to convert ETL to PCAP format. Error code: " + std::to_string(convertResult));
-        }
-    }catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    } catch (const std::exception& e) {
-        logger->error("Error collecting all logs: " + std::string(e.what()));
-    }
-}
-void NVMLogCollectorWindows::collectDARTBundle() {
+//         int convertResult = system(convertCmd.c_str());
+//         if (convertResult == 0) {
+//             logger->info("Successfully converted ETL to PCAP format");
+//             logger->info("PCAP file saved to: " + pcapPath);
+//         } else {
+//             logger->error("Failed to convert ETL to PCAP format. Error code: " + std::to_string(convertResult));
+//         }
+//     }catch(const LogCollectorError& e) {
+//         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+//         logger->error("Details: " + std::string(e.what()));
+//     } catch (const std::exception& e) {
+//         logger->error("Error collecting all logs: " + std::string(e.what()));
+//     }
+// }
+
+/**
+ * @brief Collects a DART bundle and saves it as a zip file on the Desktop.
+ * @note Executes the DART CLI tool to generate the bundle.
+ * @details Logs the success or failure of the collection process.
+ */
+void NVMLogCollectorWindows::collectDARTLogs() {
     try{
         logger->info("Starting DART bundle collection...");
     
@@ -620,6 +696,12 @@ void NVMLogCollectorWindows::collectDARTBundle() {
         logger->error("Error collecting DART bundle: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Retrieves the user profile directory path on Windows.
+ * @note Uses the `USERPROFILE` environment variable to determine the path.
+ * @return The user profile path as a string, or an empty string if not found.
+ */
 std::string NVMLogCollectorWindows::getUserProfilePath() {
     const char* userProfile = getenv("USERPROFILE");
     if (userProfile) {
@@ -627,6 +709,55 @@ std::string NVMLogCollectorWindows::getUserProfilePath() {
     }
     return "";
 }
+
+/**
+ * @brief Displays a timer and waits for user to press Ctrl+C to stop collection
+ * @note Uses signal handler to catch SIGINT (Ctrl+C)
+ * @note Displays elapsed time in MM:SS format with real-time updates
+ * @note Sets g_stopCollection flag to true when interrupted
+ */
+void NVMLogCollectorWindows::collectLogsWithTimer() {
+    try{
+        // Set up signal handler
+        signal(SIGINT, signalHandler);
+        g_stopCollection = false;
+        
+        // Start time
+        auto startTime = std::chrono::steady_clock::now();
+        int elapsedSeconds = 0;
+        
+        while (!g_stopCollection) {
+            auto currentTime = std::chrono::steady_clock::now();
+            elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>
+                            (currentTime - startTime).count();
+            
+            // Show elapsed time
+            std::cout << "\r\033[K" << "Time elapsed: " 
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds/60 << ":"
+                    << std::setfill('0') << std::setw(2) << elapsedSeconds%60 
+                    << " (Press Ctrl+C to stop)" << std::flush;
+            
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+    catch(const LogCollectorError& e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+    }
+    catch (const std::exception& e) {
+        logger->error("Error collecting logs with timer: " + std::string(e.what()));
+    }
+}
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+/**
+ * @brief Clears the `logcollector.log` file in the current build directory.
+ * @note Ensures the log file is reset before starting a new collection.
+ * @details Checks if the file exists and truncates it if necessary.
+ */
 void NVMLogCollectorWindows::LogCollectorFile(){
     try {
         std::string buildPath = fs::current_path().string();
@@ -645,6 +776,12 @@ void NVMLogCollectorWindows::LogCollectorFile(){
         return;
     }
 }
+
+/**
+ * @brief Organizes collected logs into a directory and creates a zip archive.
+ * @note Moves logs to a dedicated folder and compresses them with a timestamp.
+ * @details Cleans up temporary files after archiving.
+ */
 void NVMLogCollectorWindows::organizeAndArchiveLogs() {
     try {
         logger->info("Organizing and archiving collected logs...");
@@ -738,6 +875,12 @@ void NVMLogCollectorWindows::organizeAndArchiveLogs() {
         logger->error("Error organizing and archiving logs: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates necessary debug files for ISE posture logs.
+ * @note Creates `debuglogs.json` and `v4debug.json` in their respective paths.
+ * @details Logs the success or failure of file creation.
+ */
 void NVMLogCollectorWindows::createAllFilesISEPosture() {
     try {
         // Get user profile directory
@@ -818,6 +961,12 @@ void NVMLogCollectorWindows::createAllFilesISEPosture() {
         logger->error("Error creating debug files: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Deletes debug files for ISE posture logs if they exist.
+ * @note Removes `debuglogs.json` and `v4debug.json` from their respective paths.
+ * @details Logs the success or failure of the deletion process.
+ */
 void NVMLogCollectorWindows::deleteAllFilesISEPosture() {
     try {
         logger->info("Removing all debug configuration files...");
@@ -871,6 +1020,12 @@ void NVMLogCollectorWindows::deleteAllFilesISEPosture() {
         logger->error("Error deleting debug files: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Creates necessary debug files for ZTA logs.
+ * @note Creates `logconfig.json` and `flags.json` in the ZTA directory.
+ * @details Logs the success or failure of file creation.
+ */
 void NVMLogCollectorWindows::createAllFilesZTA(){
     try{
         // Get user profile directory
@@ -940,6 +1095,12 @@ void NVMLogCollectorWindows::createAllFilesZTA(){
         logger->error("Error creating debug files: " + std::string(e.what()));
     }
 }
+
+/**
+ * @brief Deletes debug files for ZTA logs if they exist.
+ * @note Removes `logconfig.json` and `flags.json` from the ZTA directory.
+ * @details Logs the success or failure of the deletion process.
+ */
 void NVMLogCollectorWindows::deleteAllFilesZTA(){
     try{
         // Get user profile directory
@@ -978,4 +1139,213 @@ void NVMLogCollectorWindows::deleteAllFilesZTA(){
     catch (const std::exception& e) {
         logger->error("Error creating debug files: " + std::string(e.what()));
     }
+}
+
+/**
+ * @brief Starts the collection of KDF logs on Windows.
+ * @note Uses DebugView to capture logs and saves them to the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::collectKdfLogs() {
+    std::string userProfilePath = getUserProfilePath();
+    if (userProfilePath.empty()) {
+        logger->error("Could not determine user profile directory");
+        return;
+    }
+    std::string kdfLogPath = userProfilePath + "\\Desktop\\kdf_logs.log";
+    std::string debugViewPath = userProfilePath + "\\Downloads\\Debugview\\Dbgview.exe";
+    std::string cmd = "start \"KDF Log Collection\" \"" + debugViewPath + "\" /k /v /om /l \"" + kdfLogPath + "\"";
+    logger->info("[*] Starting KDF Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started KDF Logs collection");
+    } else {
+        logger->error("[!] Failed to start KDF Logs collection");
+    }
+}
+
+/**
+ * @brief Starts the collection of NVM system logs on Windows.
+ * @note Uses `wevtutil` to query logs and saves them to the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::collectNvmLogs() {
+    std::string userProfilePath = getUserProfilePath();
+    if (userProfilePath.empty()) {
+        logger->error("Could not determine user profile directory");
+        return;
+    }
+    std::string nvmLogPath = userProfilePath + "\\Desktop\\nvm_system_logs.log";
+    std::string cmd = "wevtutil qe \"Cisco Secure Client - Network Visibility Module\" /f:text > \"" + nvmLogPath + "\"";
+    logger->info("[*] Starting NVM System Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started NVM System Logs collection");
+    } else {
+        logger->error("[!] Failed to start NVM System Logs collection");
+    }
+}
+
+/**
+ * @brief Starts a packet capture on Windows.
+ * @note Uses `pktmon` to capture packets and saves them as an `.etl` file on the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::collectPacketCapture() {
+    std::string userProfilePath = getUserProfilePath();
+    if (userProfilePath.empty()) {
+        logger->error("Could not determine user profile directory");
+        return;
+    }
+    std::string etlPath = userProfilePath + "\\Desktop\\PacketCapture.etl";
+    std::string cmd = "pktmon start --capture --file-name \"" + etlPath + "\"";
+    logger->info("[*] Starting Packet Capture collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started Packet Capture collection");
+    } else {
+        logger->error("[!] Failed to start Packet Capture collection");
+    }
+}
+
+/**
+ * @brief Starts the collection of Umbrella logs on Windows.
+ * @note Uses `wevtutil` to query logs and saves them to the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::collectUmbrellaLogs() {
+    std::string userProfilePath = getUserProfilePath();
+    if (userProfilePath.empty()) {
+        logger->error("Could not determine user profile directory");
+        return;
+    }
+    std::string umbrellaLogPath = userProfilePath + "\\Desktop\\swg_umbrella_logs.log";
+    std::string cmd = "wevtutil qe \"Cisco Secure Client - Umbrella\" /f:text > \"" + umbrellaLogPath + "\"";
+    logger->info("[*] Starting Umbrella/SWG Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started Umbrella/SWG Logs collection");
+    } else {
+        logger->error("[!] Failed to start Umbrella/SWG Logs collection");
+    }
+}
+
+/**
+ * @brief Starts the collection of ISE Posture logs on Windows.
+ * @note Uses `wevtutil` to query logs and saves them to the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::collectIsePostureLogs() {
+    std::string userProfilePath = getUserProfilePath();
+    if (userProfilePath.empty()) {
+        logger->error("Could not determine user profile directory");
+        return;
+    }
+    std::string isePostureLogPath = userProfilePath + "\\Desktop\\ise_posture_logs.log";
+    std::string cmd = "wevtutil qe \"Cisco Secure Client - ISE Posture\" /f:text > \"" + isePostureLogPath + "\"";
+    logger->info("[*] Starting ISE Posture Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started ISE Posture Logs collection");
+    } else {
+        logger->error("[!] Failed to start ISE Posture Logs collection");
+    }
+}
+
+/**
+ * @brief Starts the collection of ZTA logs on Windows.
+ * @note Uses `wevtutil` to query logs and saves them to the Desktop.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::collectZtaLogs() {
+    std::string userProfilePath = getUserProfilePath();
+    if (userProfilePath.empty()) {
+        logger->error("Could not determine user profile directory");
+        return;
+    }
+    std::string ztaLogPath = userProfilePath + "\\Desktop\\zta_logs.log";
+    std::string cmd = "wevtutil qe \"Cisco Secure Client - Zero Trust Access\" /f:text > \"" + ztaLogPath + "\"";
+    logger->info("[*] Starting ZTA Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully started ZTA Logs collection");
+    } else {
+        logger->error("[!] Failed to start ZTA Logs collection");
+    }
+}
+
+/**
+ * @brief Stops the collection of KDF logs on Windows.
+ * @note Uses `taskkill` to terminate the DebugView process.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::stopKdfLogs() {
+    std::string cmd = "taskkill /F /IM Dbgview.exe > nul 2>&1";
+    logger->info("Stopping KDF Logs collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully stopped KDF Logs collection");
+    } else {
+        logger->warning("[!] Failed to stop KDF Logs collection");
+    }
+}
+
+/**
+ * @brief Stops the collection of NVM system logs on Windows.
+ * @note Placeholder function for stopping NVM log collection.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::stopNvmLogs() {
+    logger->info("Stopping NVM System Logs collection...");
+    // Placeholder for stopping NVM logs if needed
+    logger->info("[+] Successfully stopped NVM System Logs collection");
+}
+
+/**
+ * @brief Stops the packet capture on Windows.
+ * @note Uses `pktmon` to stop the capture and save the file.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::stopPacketCapture() {
+    std::string cmd = "pktmon stop";
+    logger->info("Stopping Packet Capture collection...");
+    int result = system(cmd.c_str());
+    if (result == 0) {
+        logger->info("[+] Successfully stopped Packet Capture collection");
+    } else {
+        logger->warning("[!] Failed to stop Packet Capture collection");
+    }
+}
+
+/**
+ * @brief Stops the collection of Umbrella logs on Windows.
+ * @note Placeholder function for stopping Umbrella log collection.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::stopUmbrellaLogs() {
+    logger->info("Stopping Umbrella/SWG Logs collection...");
+    // Placeholder for stopping Umbrella logs if needed
+    logger->info("[+] Successfully stopped Umbrella/SWG Logs collection");
+}
+
+/**
+ * @brief Stops the collection of ISE Posture logs on Windows.
+ * @note Placeholder function for stopping ISE Posture log collection.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::stopIsePostureLogs() {
+    logger->info("Stopping ISE Posture Logs collection...");
+    // Placeholder for stopping ISE Posture logs if needed
+    logger->info("[+] Successfully stopped ISE Posture Logs collection");
+}
+
+/**
+ * @brief Stops the collection of ZTA logs on Windows.
+ * @note Placeholder function for stopping ZTA log collection.
+ * @details Logs the success or failure of the operation.
+ */
+void NVMLogCollectorWindows::stopZtaLogs() {
+    logger->info("Stopping ZTA Logs collection...");
+    // Placeholder for stopping ZTA logs if needed
+    logger->info("[+] Successfully stopped ZTA Logs collection");
 }

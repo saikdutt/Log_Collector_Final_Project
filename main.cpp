@@ -36,29 +36,40 @@ int main() {
     collector.LogCollectorFile();
     try
     {
-        // Get NVM version
-        // collector.get_nvm_version();
-        // collector.writeDebugConf();
-        // collector.backupServiceProfile();
-        // collector.addTroubleshootTag();
-        // collector.setKDFDebugFlag();
-        // collector.createSWGConfigOverride();
-        // collector.createAllFilesISEPosture();
-        // collector.createAllFilesZTA();
-        // collector.findAllAgentProcesses();
-        // collector.collectAllLogsSimultaneously();
-        // logger->info("All logs collected successfully");
-        // collector.collectDARTLogs();
-        // logger->info("DART logs collected successfully");
-        // collector.removeDebugConf();
-        // collector.clearKDFDebugFlag();
-        // collector.restoreServiceProfile();
-        // collector.deleteSWGConfigOverride();
-        // collector.deleteAllfilesISEPosture();
-        // collector.deleteAllfilesZTA();
-        // collector.findAllAgentProcesses();
-        // collector.organizeAndArchiveLogs();
-        collector.collectkdflogsmac();
+        //Get NVM version
+        collector.get_nvm_version();
+        collector.writeDebugConf();
+        collector.backupServiceProfile();
+        collector.addTroubleshootTag();
+        collector.setKDFDebugFlag();
+        collector.createSWGConfigOverride();
+        collector.createAllFilesISEPosture();
+        collector.createAllFilesZTA();
+        collector.findAllAgentProcesses();
+        collector.collectKdfLogs();
+        collector.collectNvmLogs();
+        collector.collectPacketCapture();
+        collector.collectUmbrellaLogs();
+        collector.collectIsePostureLogs();
+        collector.collectZtaLogs();
+        collector.collectLogsWithTimer();
+        collector.stopKdfLogs();
+        collector.stopNvmLogs();
+        collector.stopPacketCapture();
+        collector.stopUmbrellaLogs();
+        collector.stopIsePostureLogs();
+        collector.stopZtaLogs();
+        logger->info("All logs collected successfully");
+        collector.collectDARTLogs();
+        logger->info("DART logs collected successfully");
+        collector.removeDebugConf();
+        collector.clearKDFDebugFlag();
+        collector.restoreServiceProfile();
+        collector.deleteSWGConfigOverride();
+        collector.deleteAllFilesISEPosture();
+        collector.deleteAllFilesZTA();
+        collector.findAllAgentProcesses();
+        collector.organizeAndArchiveLogs();
     }
     catch(const std::exception& e)
     {

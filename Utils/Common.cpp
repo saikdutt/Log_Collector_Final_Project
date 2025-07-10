@@ -421,42 +421,6 @@ void CommonUtils::removeDebugConfSystem(const std::string& PATH) {
         logger->error("Error removing NVM debug configuration file: " + std::string(e.what()));
     }
 }
-void CommonUtils::collectLogsWithTimer() {
-    try{
-        // Set up signal handler
-        signal(SIGINT, signalHandler);
-        g_stopCollection = false;
-        
-        // Start time
-        auto startTime = std::chrono::steady_clock::now();
-        int elapsedSeconds = 0;
-        
-        while (!g_stopCollection) {
-            auto currentTime = std::chrono::steady_clock::now();
-            elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>
-                            (currentTime - startTime).count();
-            
-            // Show elapsed time
-            std::cout << "\r\033[K" << "Time elapsed: " 
-                    << std::setfill('0') << std::setw(2) << elapsedSeconds/60 << ":"
-                    << std::setfill('0') << std::setw(2) << elapsedSeconds%60 
-                    << " (Press Ctrl+C to stop)" << std::flush;
-            
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }
-    catch(const LogCollectorError& e) {
-        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
-        logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
-        logger->error("Error collecting logs with timer: " + std::string(e.what()));
-    }
-}
-static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
-    ((std::string*)userp)->append((char*)contents, size * nmemb);
-    return size * nmemb;
-}
 void CommonUtils::createSWGConfigOverrideSystem(const std::string& PATH) {
     try
     {

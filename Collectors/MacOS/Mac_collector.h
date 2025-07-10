@@ -19,30 +19,47 @@ public:
                       bool enable_debug_logs=false,
                       int debug_level=0);
     ~NVMLogCollectorMac();
+    // Implement BaseCollector functions
+    void findAllAgentProcesses() override;
+    void collectLogsWithTimer() override;
+    void LogCollectorFile() override;
+    void organizeAndArchiveLogs() override;
+    void collectDARTLogs() override;
 
-    void get_nvm_version();
+    // Implement NVMLogCollector functions
     // NVM configuration functions
-    void writeDebugConf();
-    void addTroubleshootTag();
-    void findAllAgentProcesses();
-    void setKDFDebugFlag();
-    void resetKDFDebugFlag();
-    void createSWGConfigOverride();
-    void backupServiceProfile();
-    void restoreServiceProfile();
-    void collectAllLogsSimultaneously();
-    void collectDARTLogs();
-    void organizeAndArchiveLogs();
-    void removeDebugConf();
-    void clearKDFDebugFlag();
-    void LogCollectorFile();
-    void deleteSWGConfigOverride();
-    void createAllFilesISEPosture();
-    void deleteAllfilesISEPosture();
-    void createAllFilesZTA();
-    void deleteAllfilesZTA();
-    void collectLogsWithTimer();
-    void collectkdflogsmac();
+    void get_nvm_version() override;
+    void writeDebugConf() override;
+    void removeDebugConf() override;
+    void backupServiceProfile() override;
+    void restoreServiceProfile() override;
+    void addTroubleshootTag() override;
+    void setKDFDebugFlag() override;
+    void clearKDFDebugFlag() override;
+    void collectKdfLogs() override;
+    void stopKdfLogs() override;
+    void collectNvmLogs() override;
+    void stopNvmLogs() override;
+    void collectPacketCapture() override;
+    void stopPacketCapture() override;
+
+    // Implement SWGLogCollector functions
+    void createSWGConfigOverride() override;
+    void deleteSWGConfigOverride() override;
+    void collectUmbrellaLogs() override;
+    void stopUmbrellaLogs() override;
+
+    // Implement ISEPostureCollector functions
+    void createAllFilesISEPosture() override;
+    void deleteAllFilesISEPosture() override;
+    void collectIsePostureLogs() override;
+    void stopIsePostureLogs() override;
+
+    // Implement ZTACollector functions
+    void createAllFilesZTA() override;
+    void deleteAllFilesZTA() override;
+    void collectZtaLogs() override;
+    void stopZtaLogs() override;
 };
 
 #endif // MAC_COLLECTOR_H
