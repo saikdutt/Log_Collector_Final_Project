@@ -20,7 +20,8 @@ void signalHandler(int signum) {
     if (signum == SIGINT) {
         g_stopCollection = true;
     }
-}   void CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
+}   
+LogCollectorError::ErrorType CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
 #if defined(__linux__) // Linux platform
     try {
         string pattern;
@@ -44,10 +45,13 @@ void signalHandler(int signum) {
                     break;
                 default:
                     logger->error("[!] Invalid choice. Exiting.");
+                    logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                    return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
-        } else if (patternChoice != 4) {
+        } else {
             logger->error("[!] Invalid choice. Exiting.");
-            return;
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
 
         // Create a temp file path in /tmp directory
@@ -64,7 +68,8 @@ void signalHandler(int signum) {
             FILE* pipe = popen(checkCmd.c_str(), "r");
             if (!pipe) {
                 logger->error("[!] Failed to check XML file existence");
-                return;
+                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
             
             char buffer[128];
@@ -86,11 +91,13 @@ void signalHandler(int signum) {
                 
                 if (createResult != 0) {
                     logger->error("[!] Failed to create XML file. Check permissions.");
-                    return;
+                    logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                    return LogCollectorError::ErrorType::COMMAND_FAILED;
                 }
             } else {
                 logger->error("[!] Failed to copy XML file for editing.");
-                return;
+                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
         }
         
@@ -101,7 +108,8 @@ void signalHandler(int signum) {
 
         if (!inFile) {
             logger->error("[!] Cannot open temporary XML file");
-            return;
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
 
         while (getline(inFile, line)) {
@@ -154,27 +162,35 @@ void signalHandler(int signum) {
                 
                 if (writeResult == 0) {
                     logger->info("[+] Inserted TroubleShoot tag with pattern: " + pattern);
-                    // Clean up
-                    std::remove(tmpFile.c_str());
+                    return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
                 } else {
                     logger->error("[!] Failed to write to XML file. Check permissions.");
+                    logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                    return LogCollectorError::ErrorType::COMMAND_FAILED;
                 }
             } else {
                 logger->error("[!] Failed to write to temporary file.");
+                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
         } else {
             logger->error("[!] Could not find </NVMProfile> tag in XML.");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
+        return e.getType();
     }
     catch (const std::exception& e) {
         logger->error("Error adding TroubleShoot tag: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
 #else // macOS and Windows platforms
-    try{
+    try {
         string pattern;
         logger->info("\nSelect pattern for <TroubleShoot> tag:");
         logger->info("1. NVM-TRACE-FLOWS");
@@ -186,21 +202,25 @@ void signalHandler(int signum) {
         if (patternChoice >= 1 && patternChoice <= 3) {
             switch (patternChoice) {
                 case 1:
-                    pattern="NVM-TRACE-FLOWS";
+                    pattern = "NVM-TRACE-FLOWS";
                     break;
                 case 2:
-                    pattern="PROCESS-TREE-INFO";
+                    pattern = "PROCESS-TREE-INFO";
                     break;
                 case 3:
-                    pattern="PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
+                    pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
                     break;
                 default:
                     logger->error("[!] Invalid choice. Exiting.");
+                    logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                    return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
-        } else if (patternChoice != 4) {
+        } else {
             logger->error("[!] Invalid choice. Exiting.");
-            return;
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
+
         // First check if XML file exists
         if (!fs::exists(XML_FILE)) {
             logger->error("[!] XML file not found: " + XML_FILE);
@@ -212,9 +232,11 @@ void signalHandler(int signum) {
                 newXml.close();
             } else {
                 logger->error("[!] Failed to create XML file. Check permissions.");
+                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
         }
-            
+
         // Now read the file
         ifstream inFile(XML_FILE);
         string xmlContent;
@@ -222,10 +244,12 @@ void signalHandler(int signum) {
 
         if (!inFile) {
             logger->error("[!] Cannot open XML file: " + XML_FILE);
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
 
         while (getline(inFile, line)) {
-        xmlContent += line + "\n";
+            xmlContent += line + "\n";
         }
         inFile.close();
 
@@ -234,12 +258,12 @@ void signalHandler(int signum) {
         size_t tagStartPos = 0;
         size_t tagEndPos = 0;
         bool existingTagsRemoved = false;
-            
+
         // Search for any TroubleShoot tags and remove them
         while ((startPos = xmlContent.find("<TroubleShoot>", startPos)) != string::npos) {
             tagStartPos = startPos;
             tagEndPos = xmlContent.find("</TroubleShoot>", startPos) + 15; // Length of </TroubleShoot>
-                
+
             if (tagEndPos != string::npos) {
                 // Remove the entire tag
                 xmlContent.erase(tagStartPos, tagEndPos - tagStartPos);
@@ -251,7 +275,7 @@ void signalHandler(int signum) {
                 startPos += 14; // Length of <TroubleShoot>
             }
         }
-            
+
         if (existingTagsRemoved) {
             logger->info("[*] Removed existing TroubleShoot tags.");
         }
@@ -267,23 +291,32 @@ void signalHandler(int signum) {
                 outFile << xmlContent;
                 outFile.close();
                 logger->info("[+] Inserted TroubleShoot tag with pattern: " + pattern);
+                return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
             } else {
                 logger->error("[!] Failed to write to XML file. Check permissions.");
+                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
         } else {
             logger->error("[!] Could not find </NVMProfile> tag in XML.");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
+        return e.getType();
     }
     catch (const std::exception& e) {
         logger->error("Error adding TroubleShoot tag: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
 #endif
 }
-void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue) {
+
+LogCollectorError::ErrorType CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue) {
     try {
         // Remove "0x" prefix if present
         std::string hexValueCopy = hexValue; // Create a copy since hexValue is const
@@ -296,7 +329,8 @@ void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::stri
         // Check if acsocktool exists
         if (!fs::exists(PATH)) {
             logger->error("[!] acsocktool not found at: " + PATH);
-            return;
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::FILE_NOT_FOUND));
+            return LogCollectorError::ErrorType::FILE_NOT_FOUND;
         }
 
         // Execute acsocktool command with hex value
@@ -312,22 +346,30 @@ void CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::stri
             logger->info("[+] KDF debug flag set successfully");
         } else {
             logger->error("[!] Failed to set KDF debug flag");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
     } catch(const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
+        return e.getType();
     } catch (const std::exception& e) {
         logger->error("Error setting KDF debug flag: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
+    return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
-void CommonUtils::clearKDFDebugFlagSystem(const std::string& PATH) {
-    try{
+
+LogCollectorError::ErrorType CommonUtils::clearKDFDebugFlagSystem(const std::string& PATH) {
+    try {
         logger->info("Clearing KDF debug flag...");
         
         // Check if acsocktool exists
         if (!fs::exists(PATH)) {
             logger->error("acsocktool not found at: " + PATH);
-            return;
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::FILE_NOT_FOUND));
+            return LogCollectorError::ErrorType::FILE_NOT_FOUND;
         }
         
         // Construct and execute command
@@ -342,19 +384,24 @@ void CommonUtils::clearKDFDebugFlagSystem(const std::string& PATH) {
         
         if (result == 0) {
             logger->info("KDF debug flag cleared successfully");
+            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
         } else {
             logger->error("Failed to clear KDF debug flag. Error code: " + std::to_string(result));
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
-    }
-    catch(const LogCollectorError& e) {
+    } catch(const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
-    }
-    catch (const std::exception& e) {
+        return e.getType();
+    } catch (const std::exception& e) {
         logger->error("Error clearing KDF debug flag: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
 }
-void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
+
+LogCollectorError::ErrorType CommonUtils::writeDebugConfSystem(const std::string& PATH) {
     try {
         logger->info("Enter the debug value");
         int value;
@@ -368,9 +415,13 @@ void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
         
         if (result == 0) {
             logger->info("[+] Debug flag value " + std::to_string(value) + " written to " + PATH);
+            logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
+            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
         } else {
             logger->error("[!] Failed to write to " + PATH);
             logger->error("[!] Make sure you're running with sudo.");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
 #else
         // macOS/Windows implementation - use direct file access
@@ -379,22 +430,28 @@ void CommonUtils::writeDebugConfSystem(const std::string& PATH) {
             conf << value;
             conf.close();
             logger->info("[+] Debug flag value " + std::to_string(value) + " written to " + PATH);
+            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
         } else {
             logger->error("[!] Failed to write to " + PATH);
             logger->error("[!] Make sure you're running with sudo.");
-            exit(1);
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
 #endif
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
+        return e.getType();
     }
     catch (const std::exception& e) {
         logger->error("Error writing debug configuration: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
 }
-void CommonUtils::removeDebugConfSystem(const std::string& PATH) {
+
+LogCollectorError::ErrorType CommonUtils::removeDebugConfSystem(const std::string& PATH) {
     try {
         logger->info("Removing NVM debug configuration file...");
 
@@ -409,21 +466,27 @@ void CommonUtils::removeDebugConfSystem(const std::string& PATH) {
         
         if (result == 0) {
             logger->info("Successfully removed nvm_dbg.conf");
+            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
         } else {
             logger->error("Failed to remove nvm_dbg.conf. Error code: " + std::to_string(result));
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
     }
-    catch(const LogCollectorError& e) {
+    catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
+        return e.getType();
     }
     catch (const std::exception& e) {
         logger->error("Error removing NVM debug configuration file: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
 }
-void CommonUtils::createSWGConfigOverrideSystem(const std::string& PATH) {
-    try
-    {
+
+LogCollectorError::ErrorType CommonUtils::createSWGConfigOverrideSystem(const std::string& PATH) {
+    try {
         string CONFIG_OVERRIDE_FILE = PATH + "SWGConfigOverride.json";
 
         // Check if directory exists, create if it doesn't
@@ -433,7 +496,8 @@ void CommonUtils::createSWGConfigOverrideSystem(const std::string& PATH) {
                 logger->info("[+] Created Umbrella directory at: " + PATH);
             } catch (const fs::filesystem_error& e) {
                 logger->error("[!] Error creating directory: " + string(e.what()));
-                return;
+                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                return LogCollectorError::ErrorType::COMMAND_FAILED;
             }
         }
         // Create or overwrite the SWGConfigOverride.json file
@@ -448,22 +512,27 @@ void CommonUtils::createSWGConfigOverrideSystem(const std::string& PATH) {
             
             configFile.close();
             logger->info("[+] Successfully created " + CONFIG_OVERRIDE_FILE);
+            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
         } else {
             logger->error("[!] Failed to write to " + CONFIG_OVERRIDE_FILE);
             logger->error("[!] Make sure you're running with sudo privileges.");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
-        
-        logger->info("[+] SWG Config Override setup completed successfully");
     }
     catch (const LogCollectorError& e) {
         logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
         logger->error("Details: " + std::string(e.what()));
+        return e.getType();
     }
     catch (const std::exception& e) {
         logger->error("Error creating SWGConfigOverride.json: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
 }
-void CommonUtils::deleteSWGConfigOverrideSystem(const std::string& PATH) {
+
+LogCollectorError::ErrorType CommonUtils::deleteSWGConfigOverrideSystem(const std::string& PATH) {
     string CONFIG_OVERRIDE_FILE = PATH + "SWGConfigOverride.json";
 
     // Check if file exists before attempting to delete
@@ -472,14 +541,20 @@ void CommonUtils::deleteSWGConfigOverrideSystem(const std::string& PATH) {
             // Remove the file
             fs::remove(CONFIG_OVERRIDE_FILE);
             logger->info("[+] Successfully deleted " + CONFIG_OVERRIDE_FILE);
+            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
         } 
         catch (const LogCollectorError& e) {
             logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
             logger->error("Details: " + std::string(e.what()));
+            return e.getType();
         } catch (const std::exception& e) {
-            logger->error("Error creating SWGConfigOverride.json: " + std::string(e.what()));
+            logger->error("Error deleting SWGConfigOverride.json: " + std::string(e.what()));
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
     } else {
         logger->warning("[!] SWGConfigOverride.json file not found at: " + CONFIG_OVERRIDE_FILE);
+        logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
+        return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
     }
 }

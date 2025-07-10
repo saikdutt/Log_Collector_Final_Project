@@ -21,13 +21,13 @@ int main() {
     config["log_file"] = "logcollector.log";
     #ifdef __APPLE__
         // Create NVM collector for macOS
-        NVMLogCollectorMac collector(config, logger);
+        LogCollectorMac collector(config, logger);
     #elif defined(_WIN32)
         // Create NVM collector for Windows
-        NVMLogCollectorWindows collector(config, logger);
+        LogCollectorWindows collector(config, logger);
     #elif defined(__linux__)
         // Create NVM collector for Linux
-        NVMLogCollectorLinux collector(config, logger);
+        LogCollectorLinux collector(config, logger);
     #else
         #error "Unsupported platform"
     #endif

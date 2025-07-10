@@ -6,7 +6,7 @@
 #include "../ISEPostureCollector.h"
 #include "../ZTALogCollector.h"
 #include "../../Utils/Common.h" 
-class NVMLogCollectorMac : 
+class LogCollectorMac : 
     public virtual NVMLogCollector, 
     public virtual SWGLogCollector, 
     public virtual ISEPostureCollector, 
@@ -14,52 +14,52 @@ class NVMLogCollectorMac :
 private:
     CommonUtils utils;  
 public:
-    NVMLogCollectorMac(const std::map<std::string, std::string>& config, 
+    LogCollectorMac(const std::map<std::string, std::string>& config, 
                       std::shared_ptr<Logger> logger,
                       bool enable_debug_logs=false,
                       int debug_level=0);
-    ~NVMLogCollectorMac();
+    ~LogCollectorMac();
     // Implement BaseCollector functions
-    void findAllAgentProcesses() override;
-    void collectLogsWithTimer() override;
-    void LogCollectorFile() override;
-    void organizeAndArchiveLogs() override;
-    void collectDARTLogs() override;
+    LogCollectorError::ErrorType findAllAgentProcesses() override;
+    LogCollectorError::ErrorType collectLogsWithTimer() override;
+    LogCollectorError::ErrorType LogCollectorFile() override;
+    LogCollectorError::ErrorType organizeAndArchiveLogs() override;
+    LogCollectorError::ErrorType collectDARTLogs() override;
 
     // Implement NVMLogCollector functions
     // NVM configuration functions
-    void get_nvm_version() override;
-    void writeDebugConf() override;
-    void removeDebugConf() override;
-    void backupServiceProfile() override;
-    void restoreServiceProfile() override;
-    void addTroubleshootTag() override;
-    void setKDFDebugFlag() override;
-    void clearKDFDebugFlag() override;
-    void collectKdfLogs() override;
-    void stopKdfLogs() override;
-    void collectNvmLogs() override;
-    void stopNvmLogs() override;
-    void collectPacketCapture() override;
-    void stopPacketCapture() override;
+    LogCollectorError::ErrorType get_nvm_version() override;
+    LogCollectorError::ErrorType writeDebugConf() override;
+    LogCollectorError::ErrorType removeDebugConf() override;
+    LogCollectorError::ErrorType backupServiceProfile() override;
+    LogCollectorError::ErrorType restoreServiceProfile() override;
+    LogCollectorError::ErrorType addTroubleshootTag() override;
+    LogCollectorError::ErrorType setKDFDebugFlag() override;
+    LogCollectorError::ErrorType clearKDFDebugFlag() override;
+    LogCollectorError::ErrorType collectKdfLogs() override;
+    LogCollectorError::ErrorType stopKdfLogs() override;
+    LogCollectorError::ErrorType collectNvmLogs() override;
+    LogCollectorError::ErrorType stopNvmLogs() override;
+    LogCollectorError::ErrorType collectPacketCapture() override;
+    LogCollectorError::ErrorType stopPacketCapture() override;
 
     // Implement SWGLogCollector functions
-    void createSWGConfigOverride() override;
-    void deleteSWGConfigOverride() override;
-    void collectUmbrellaLogs() override;
-    void stopUmbrellaLogs() override;
+    LogCollectorError::ErrorType createSWGConfigOverride() override;
+    LogCollectorError::ErrorType deleteSWGConfigOverride() override;
+    LogCollectorError::ErrorType collectUmbrellaLogs() override;
+    LogCollectorError::ErrorType stopUmbrellaLogs() override;
 
     // Implement ISEPostureCollector functions
-    void createAllFilesISEPosture() override;
-    void deleteAllFilesISEPosture() override;
-    void collectIsePostureLogs() override;
-    void stopIsePostureLogs() override;
+    LogCollectorError::ErrorType createAllFilesISEPosture() override;
+    LogCollectorError::ErrorType deleteAllFilesISEPosture() override;
+    LogCollectorError::ErrorType collectIsePostureLogs() override;
+    LogCollectorError::ErrorType stopIsePostureLogs() override;
 
     // Implement ZTACollector functions
-    void createAllFilesZTA() override;
-    void deleteAllFilesZTA() override;
-    void collectZtaLogs() override;
-    void stopZtaLogs() override;
+    LogCollectorError::ErrorType createAllFilesZTA() override;
+    LogCollectorError::ErrorType deleteAllFilesZTA() override;
+    LogCollectorError::ErrorType collectZtaLogs() override;
+    LogCollectorError::ErrorType stopZtaLogs() override;
 };
 
 #endif // MAC_COLLECTOR_H

@@ -2,6 +2,7 @@
 #define COMMON_H
 
 #include "Logger.h"
+#include "Error.h"
 extern std::atomic<bool> g_stopCollection;
 
 void signalHandler(int signum);
@@ -15,13 +16,21 @@ class CommonUtils {
 public:
     // Constructor takes a logger
     CommonUtils(std::shared_ptr<Logger> logger);
-    void addTroubleshootTagSystem(const std::string& PATH);
-    void setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue);
-    void clearKDFDebugFlagSystem(const std::string& PATH);
-    void writeDebugConfSystem(const std::string& PATH);
-    void removeDebugConfSystem(const std::string& PATH);
-    void createSWGConfigOverrideSystem(const std::string& PATH);
-    void deleteSWGConfigOverrideSystem(const std::string& PATH);
+    #if defined(__linux__)
+        // Linux-specific implementation
+        LogCollectorError::ErrorType addTroubleshootTagSystem(const std::string& PATH);
+        LogCollectorError::ErrorType writeDebugConfSystem(const std::string& PATH);
+        LogCollectorError::ErrorType removeDebugConfSystem(const std::string& PATH);
+    #else
+        // macOS/Windows-specific implementation
+        LogCollectorError::ErrorType addTroubleshootTagSystem(const std::string& PATH);
+        LogCollectorError::ErrorType setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue);
+        LogCollectorError::ErrorType clearKDFDebugFlagSystem(const std::string& PATH);
+        LogCollectorError::ErrorType writeDebugConfSystem(const std::string& PATH);
+        LogCollectorError::ErrorType removeDebugConfSystem(const std::string& PATH);
+        LogCollectorError::ErrorType createSWGConfigOverrideSystem(const std::string& PATH);
+        LogCollectorError::ErrorType deleteSWGConfigOverrideSystem(const std::string& PATH);
+    #endif
 private:
     std::shared_ptr<Logger> logger;
 };
