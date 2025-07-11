@@ -3,7 +3,9 @@
 
 #include <fstream>
 #include <iostream>
-
+#include <mutex>
+#include <string>
+#include <memory>
 class Logger;
 
 // Logger class definition

@@ -1,6 +1,9 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <string>
+#include <memory>
+#include <atomic>
 #include "Logger.h"
 #include "Error.h"
 extern std::atomic<bool> g_stopCollection;
@@ -16,21 +19,13 @@ class CommonUtils {
 public:
     // Constructor takes a logger
     CommonUtils(std::shared_ptr<Logger> logger);
-    #if defined(__linux__)
-        // Linux-specific implementation
-        LogCollectorError::ErrorType addTroubleshootTagSystem(const std::string& PATH);
-        LogCollectorError::ErrorType writeDebugConfSystem(const std::string& PATH);
-        LogCollectorError::ErrorType removeDebugConfSystem(const std::string& PATH);
-    #else
-        // macOS/Windows-specific implementation
-        LogCollectorError::ErrorType addTroubleshootTagSystem(const std::string& PATH);
-        LogCollectorError::ErrorType setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue);
-        LogCollectorError::ErrorType clearKDFDebugFlagSystem(const std::string& PATH);
-        LogCollectorError::ErrorType writeDebugConfSystem(const std::string& PATH);
-        LogCollectorError::ErrorType removeDebugConfSystem(const std::string& PATH);
-        LogCollectorError::ErrorType createSWGConfigOverrideSystem(const std::string& PATH);
-        LogCollectorError::ErrorType deleteSWGConfigOverrideSystem(const std::string& PATH);
-    #endif
+    LogCollectorError::ErrorType addTroubleshootTagSystem(const std::string& PATH);
+    LogCollectorError::ErrorType setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue);
+    LogCollectorError::ErrorType clearKDFDebugFlagSystem(const std::string& PATH);
+    LogCollectorError::ErrorType writeDebugConfSystem(const std::string& PATH);
+    LogCollectorError::ErrorType removeDebugConfSystem(const std::string& PATH);
+    LogCollectorError::ErrorType createSWGConfigOverrideSystem(const std::string& PATH);
+    LogCollectorError::ErrorType deleteSWGConfigOverrideSystem(const std::string& PATH);
 private:
     std::shared_ptr<Logger> logger;
 };

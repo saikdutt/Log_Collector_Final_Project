@@ -8,6 +8,7 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <regex>
 #include <array>
+#include <csignal>
 #include "Mac_collector.h"
 #include "../../Utils/Logger.h"
 #include "../../Utils/Error.h"

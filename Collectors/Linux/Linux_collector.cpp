@@ -8,6 +8,7 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <regex>
 #include <array>
+#include <csignal>
 #include "Linux_collector.h"
 #include "../../Utils/Error.h"
 #include "../../Utils/Logger.h"

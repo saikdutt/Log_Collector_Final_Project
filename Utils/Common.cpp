@@ -9,6 +9,7 @@ namespace fs = std::filesystem;
 #include <array>
 #include <regex>
 #include <thread>
+#include <atomic>
 #include "Error.h"
 using namespace std;
 CommonUtils::CommonUtils(std::shared_ptr<Logger> logger) : logger(logger) {}
@@ -21,6 +22,8 @@ void signalHandler(int signum) {
         g_stopCollection = true;
     }
 }   
+
+
 LogCollectorError::ErrorType CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
 #if defined(__linux__) // Linux platform
     try {
@@ -344,7 +347,8 @@ LogCollectorError::ErrorType CommonUtils::setKDFDebugFlagSystem(const std::strin
         logger->info("[*] Executing command: " + cmd);
         if (system(cmd.c_str()) == 0) {
             logger->info("[+] KDF debug flag set successfully");
-        } else {
+        } 
+        else {
             logger->error("[!] Failed to set KDF debug flag");
             logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
             return LogCollectorError::ErrorType::COMMAND_FAILED;

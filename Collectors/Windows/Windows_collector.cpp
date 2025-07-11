@@ -9,6 +9,7 @@ namespace fs = std::filesystem;
 #include <thread>
 #include <regex>
 #include <array>
+#include <csignal>
 #include "./Windows_collector.h"
 #include "../../Utils/Logger.h"
 #include "../../Utils/Error.h"
