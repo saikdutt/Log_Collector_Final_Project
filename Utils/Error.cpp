@@ -9,18 +9,16 @@ LogCollectorError::ErrorType LogCollectorError::getType() const {
 
 std::string LogCollectorError::getErrorTypeString(ErrorType type) {
     switch (type) {
-        case SYSTEM_NOT_FOUND:
-            return "System Component Not Found";
+        case SUCCESSFULLY_RUN:
+            return "0: Successfully Run";
         case PATH_NOT_FOUND:
-            return "Path Not Found";
+            return "1: Path Not Found";
+        case COMMAND_FAILED:
+            return "2: Command Failed to Run";
         case PERMISSION_DENIED:
-            return "Permission Denied";
-        case PROCESS_FAILED:
-            return "Process Execution Failed";
-        case FILE_ERROR:
-            return "File Operation Error";
-        case NETWORK_ERROR:
-            return "Network Operation Error";
+            return "3: Permission Denied";
+        case FILE_NOT_FOUND:
+            return "4: File Not Found";
         default:
             return "Unknown Error";
     }

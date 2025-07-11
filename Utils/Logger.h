@@ -1,12 +1,8 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <string>
 #include <fstream>
 #include <iostream>
-#include <ctime>
-#include <iomanip>
-#include <memory>
 
 class Logger;
 

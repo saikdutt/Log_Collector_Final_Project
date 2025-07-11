@@ -15,6 +15,8 @@ set(SOURCES
     Collectors/BaseCollector.cpp
     Collectors/NVMLogCollector.cpp
     Collectors/SWGLogCollector.cpp
+    Collectors/ISEPostureCollector.cpp
+    Collectors/ZTALogCollector.cpp
     Collectors/MacOS/Mac_collector.cpp 
     Collectors/Windows/Windows_collector.cpp
     Collectors/Linux/Linux_collector.cpp # Add this line
@@ -29,13 +31,6 @@ target_include_directories(LogCollector PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Utils
     ${CMAKE_CURRENT_SOURCE_DIR}/Collectors
 )
-# find_package(CURL REQUIRED)
-# find_package(JsonCpp REQUIRED)
-# target_link_libraries(${PROJECT_NAME} 
-#     PRIVATE 
-#     CURL::libcurl 
-#     JsonCpp::JsonCpp
-# )
 # Link stdc++fs for filesystem support if needed
 if(APPLE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
