@@ -1,4 +1,3 @@
-
 #if defined(__cplusplus) && __cplusplus >= 201703L
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -44,7 +43,7 @@ LogCollectorWindows::LogCollectorWindows(const std::map<std::string, std::string
       utils(logger)
 {
 
-    logger->info("CollectorWindows initialized with NVM and SWG support.");
+    logger->info("CollectorWindows initialized with NVM, SWG, ISE Posture, ZTA support.");
 }
 
 /**
@@ -231,6 +230,7 @@ LogCollectorError::ErrorType LogCollectorWindows::setKDFDebugFlag()
     string hexInput;
     logger->info("\nEnter debug flag (hexadecimal, e.g., 0x20): ");
     cin >> hexInput;
+    logger->info("Setting KDF debug flag to: " + hexInput); 
     utils.setKDFDebugFlagSystem(WinPaths::ACSOCKTOOL, hexInput);
     logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
@@ -844,6 +844,7 @@ LogCollectorError::ErrorType LogCollectorWindows::LogCollectorFile()
             if (logFile.is_open())
             {
                 logFile.close();
+                return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
             }
             else
             {

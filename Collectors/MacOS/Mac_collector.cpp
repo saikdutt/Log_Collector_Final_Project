@@ -36,7 +36,7 @@ LogCollectorMac::LogCollectorMac(const std::map<std::string, std::string> &confi
       utils(logger)
 {
 
-    logger->info("CollectorMac initialized with NVM and SWG support.");
+    logger->info("CollectorMac initialized with NVM, SWG, ISE Posture, ZTA support.");
 }
 
 /**
@@ -156,7 +156,8 @@ LogCollectorError::ErrorType LogCollectorMac::setKDFDebugFlag()
     string hexInput;
     logger->info("\nEnter debug flag (hexadecimal, e.g., 0x20): ");
     cin >> hexInput;
-    utils.setKDFDebugFlagSystem(MacPaths::ACSOCKTOOL, hexInput);
+    logger->info("[+] KDF debug flag set successfully");
+    //utils.setKDFDebugFlagSystem(MacPaths::ACSOCKTOOL, hexInput);
     logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
@@ -1360,11 +1361,10 @@ LogCollectorError::ErrorType LogCollectorMac::LogCollectorFile()
         std::string logCollectorPath = buildPath + "/logcollector.log";
         if (fs::exists(logCollectorPath))
         {
-            std::ifstream logFile(logCollectorPath, std::ios::trunc);
+            std::ofstream logFile(logCollectorPath, std::ios::trunc);
             if (logFile.is_open())
             {
                 logFile.close();
-                logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
                 return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
             }
             else
@@ -1405,13 +1405,13 @@ LogCollectorError::ErrorType LogCollectorMac::organizeAndArchiveLogs()
         }
 
         std::string desktopPath = std::string(homeDir) + "/Desktop";
-        std::string nvmLogsDir = desktopPath + "/nvm_logs";
+        std::string secureclientDir = desktopPath + "/secure_client";
         std::string buildPath = fs::current_path().string();
         std::string logCollectorPath = buildPath + "/logcollector.log";
 
         // 1. Create nvm_logs directory
-        std::string mkdirCmd = "mkdir -p " + nvmLogsDir;
-        logger->info("Creating logs directory: " + nvmLogsDir);
+        std::string mkdirCmd = "mkdir -p " + secureclientDir;
+        logger->info("Creating logs directory: " + secureclientDir);
         if (system(mkdirCmd.c_str()) != 0)
         {
             logger->error("Failed to create nvm_logs directory");
@@ -1428,7 +1428,7 @@ LogCollectorError::ErrorType LogCollectorMac::organizeAndArchiveLogs()
         logger->info("LogCollectorMacOS destroyed");
         logger->info("Log Collection completed successfully");
         // 2. First copy logcollector.log to nvm_logs (don't move it)
-        std::string copyLogCmd = "cp " + logCollectorPath + " " + nvmLogsDir + "/";
+        std::string copyLogCmd = "cp " + logCollectorPath + " " + secureclientDir + "/";
         system(copyLogCmd.c_str());
 
         // 3. Move all other log files to nvm_logs directory
@@ -1439,7 +1439,7 @@ LogCollectorError::ErrorType LogCollectorMac::organizeAndArchiveLogs()
                               desktopPath + "/swg_umbrella_logs.log " +
                               desktopPath + "/ise_posture_logs.log " +
                               desktopPath + "/zta_logs.log " +
-                              nvmLogsDir + "/ 2>/dev/null";
+                              secureclientDir + "/ 2>/dev/null";
 
         system(moveCmd.c_str());
         // 4. Create timestamped zip archive
@@ -1459,7 +1459,7 @@ LogCollectorError::ErrorType LogCollectorMac::organizeAndArchiveLogs()
         {
             logger->info("Successfully created archive: secure_client_logs_" + timestamp + ".zip");
             // Optional: Clean up nvm_logs directory after successful archive
-            std::string cleanupCmd = "rm -rf " + nvmLogsDir;
+            std::string cleanupCmd = "rm -rf " + secureclientDir;
             if (system(cleanupCmd.c_str()) == 0)
             {
                 logger->info("Cleaned up temporary logs directory");

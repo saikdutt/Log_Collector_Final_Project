@@ -36,7 +36,7 @@ LogCollectorLinux::LogCollectorLinux(const std::map<std::string, std::string> &c
       utils(logger)
 {
 
-    logger->info("NVMCollectorLinux initialized with NVM and SWG support.");
+    logger->info("CollectorLinux initialized with NVM, SWG, ISE Posture, ZTA support.");
 }
 
 /**
@@ -712,7 +712,6 @@ LogCollectorError::ErrorType LogCollectorLinux::collectLogsWithTimer()
         // Start time
         auto startTime = std::chrono::steady_clock::now();
         int elapsedSeconds = 0;
-
         while (!g_stopCollection)
         {
             auto currentTime = std::chrono::steady_clock::now();
@@ -767,7 +766,6 @@ LogCollectorError::ErrorType LogCollectorLinux::LogCollectorFile()
             if (logFile)
             {
                 logFile.close();
-                logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
                 return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
             }
             else
