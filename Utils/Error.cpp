@@ -19,6 +19,8 @@ std::string LogCollectorError::getErrorTypeString(ErrorType type) {
             return "3: Permission Denied";
         case FILE_NOT_FOUND:
             return "4: File Not Found";
+        case INVALID_INPUT:
+            return "5: Invalid Input";
         default:
             return "Unknown Error";
     }

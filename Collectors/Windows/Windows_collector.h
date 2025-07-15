@@ -20,6 +20,7 @@ public:
                       int debug_level = 0);
     ~LogCollectorWindows();
 // Implement BaseCollector functions
+    LogCollectorError::ErrorType checkAdminPrivileges() override;
     LogCollectorError::ErrorType findAllAgentProcesses() override;
     LogCollectorError::ErrorType collectLogsWithTimer() override;
     LogCollectorError::ErrorType LogCollectorFile() override;

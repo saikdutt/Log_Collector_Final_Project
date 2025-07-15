@@ -113,6 +113,14 @@ LogCollectorError::ErrorType LogCollectorMac::get_nvm_version()
     }
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
+/**
+ * @brief Checks if the user has administrative privileges
+ * @note Uses CommonUtils::checkAdminPrivilegesSystem() for system-specific checks
+ * @return LogCollectorError::ErrorType indicating success or failure
+ */
+LogCollectorError::ErrorType LogCollectorMac::checkAdminPrivileges(){
+    return utils.checkAdminPrivilegesSystem();
+}
 
 /**
  * @brief Creates debug configuration file for NVM agent
@@ -153,11 +161,7 @@ LogCollectorError::ErrorType LogCollectorMac::addTroubleshootTag()
  */
 LogCollectorError::ErrorType LogCollectorMac::setKDFDebugFlag()
 {
-    string hexInput;
-    logger->info("\nEnter debug flag (hexadecimal, e.g., 0x20): ");
-    cin >> hexInput;
-    logger->info("[+] KDF debug flag set successfully");
-    //utils.setKDFDebugFlagSystem(MacPaths::ACSOCKTOOL, hexInput);
+    utils.setKDFDebugFlagSystem(MacPaths::ACSOCKTOOL);
     logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
@@ -194,7 +198,6 @@ LogCollectorError::ErrorType LogCollectorMac::deleteSWGConfigOverride()
     logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
-
 /**
  * @brief Finds, stops and restarts all agent processes (NVM, Umbrella, ISE, ZTA)
  * @details Searches for running processes, captures their PIDs, terminates them,

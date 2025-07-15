@@ -7,7 +7,7 @@ class ZTACollector : public virtual BaseCollector {
 public:
     ZTACollector(const std::map<std::string, std::string>& config, 
                std::shared_ptr<Logger> logger);
-
+    virtual ~ZTACollector() = default;
     virtual LogCollectorError::ErrorType createAllFilesZTA() = 0;
     virtual LogCollectorError::ErrorType deleteAllFilesZTA() = 0;
     virtual LogCollectorError::ErrorType collectZtaLogs() = 0;

@@ -11,7 +11,8 @@ public:
         PATH_NOT_FOUND = 1,
         COMMAND_FAILED = 2,
         PERMISSION_DENIED = 3,
-        FILE_NOT_FOUND = 4
+        FILE_NOT_FOUND = 4,
+        INVALID_INPUT = 5,
     };
 
     LogCollectorError(ErrorType type, const std::string& message);

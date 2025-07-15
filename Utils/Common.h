@@ -6,6 +6,7 @@
 #include <atomic>
 #include "Logger.h"
 #include "Error.h"
+#include "./Collectors/BaseCollector.h"
 extern std::atomic<bool> g_stopCollection;
 
 void signalHandler(int signum);
@@ -19,8 +20,9 @@ class CommonUtils {
 public:
     // Constructor takes a logger
     CommonUtils(std::shared_ptr<Logger> logger);
+    LogCollectorError::ErrorType checkAdminPrivilegesSystem();
     LogCollectorError::ErrorType addTroubleshootTagSystem(const std::string& PATH);
-    LogCollectorError::ErrorType setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue);
+    LogCollectorError::ErrorType setKDFDebugFlagSystem(const std::string& PATH);
     LogCollectorError::ErrorType clearKDFDebugFlagSystem(const std::string& PATH);
     LogCollectorError::ErrorType writeDebugConfSystem(const std::string& PATH);
     LogCollectorError::ErrorType removeDebugConfSystem(const std::string& PATH);

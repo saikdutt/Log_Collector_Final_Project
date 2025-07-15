@@ -110,7 +110,14 @@ LogCollectorError::ErrorType LogCollectorLinux::get_nvm_version()
     logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
-
+/**
+ * @brief Checks if the user has administrative privileges
+ * @note Uses CommonUtils::checkAdminPrivilegesSystem() for system-specific checks
+ * @return LogCollectorError::ErrorType indicating success or failure
+ */
+LogCollectorError::ErrorType LogCollectorLinux::checkAdminPrivileges(){
+    return utils.checkAdminPrivilegesSystem();
+}
 /**
  * @brief Writes the debug configuration file for the NVM agent
  * @note Uses the utility function to write the debug configuration
@@ -806,29 +813,29 @@ LogCollectorError::ErrorType LogCollectorLinux::organizeAndArchiveLogs()
         }
 
         std::string desktopPath = std::string(homeDir) + "/Desktop";
-        std::string nvmLogsDir = desktopPath + "/nvm_logs";
+        std::string secureClientDir = desktopPath + "/secure_client";
 
-        // 1. Create nvm_logs directory
-        std::string mkdirCmd = "mkdir -p " + nvmLogsDir;
-        logger->info("Creating logs directory: " + nvmLogsDir);
+        // 1. Create secure_client directory
+        std::string mkdirCmd = "mkdir -p " + secureClientDir;
+        logger->info("Creating logs directory: " + secureClientDir);
         if (system(mkdirCmd.c_str()) != 0)
         {
-            logger->error("Failed to create nvm_logs directory");
+            logger->error("Failed to create secure_client directory");
             logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
             return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
-        logger->info("nvm_logs directory created successfully");
+        logger->info("secure_client directory created successfully");
 
-        // 2. Move all other log files to nvm_logs directory
+        // 2. Move all other log files to secure_client directory
         std::string moveCmd = "mv " + desktopPath + "/kdf_logs.log " +
                               desktopPath + "/nvm_system_logs.log " +
                               desktopPath + "/PacketCapture.pcap " +
                               desktopPath + "/DART_Bundle.zip " +
                               desktopPath + "/ise_posture_logs.log " +
                               desktopPath + "/zta_logs.log " +
-                              nvmLogsDir + "/ 2>/dev/null";
+                              secureClientDir + "/ 2>/dev/null";
 
-        logger->info("Moving log files to nvm_logs directory");
+        logger->info("Moving log files to secure_client directory");
         system(moveCmd.c_str());
 
         // 3. Create timestamped zip archive
@@ -848,8 +855,8 @@ LogCollectorError::ErrorType LogCollectorLinux::organizeAndArchiveLogs()
         {
             logger->info("Successfully created archive: secure_client_logs_" + timestamp + ".zip");
 
-            // Optional: Clean up nvm_logs directory after successful archive
-            std::string cleanupCmd = "rm -rf " + nvmLogsDir;
+            // Optional: Clean up secure_client directory after successful archive
+            std::string cleanupCmd = "rm -rf " + secureClientDir;
             if (system(cleanupCmd.c_str()) == 0)
             {
                 logger->info("Cleaned up temporary logs directory");

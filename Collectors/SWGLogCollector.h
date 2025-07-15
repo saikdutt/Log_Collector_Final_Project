@@ -9,7 +9,7 @@ class SWGLogCollector : public virtual BaseCollector {
 public:
     SWGLogCollector(const std::map<std::string, std::string>& config, 
                 std::shared_ptr<Logger> logger);
-    
+    virtual ~SWGLogCollector() = default;
     virtual LogCollectorError::ErrorType createSWGConfigOverride() = 0;
     virtual LogCollectorError::ErrorType deleteSWGConfigOverride() = 0;
     virtual LogCollectorError::ErrorType collectUmbrellaLogs() = 0;

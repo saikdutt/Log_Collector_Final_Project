@@ -24,7 +24,7 @@ public:
     //virtual void cleanup_logs(bool keep_source = false);
 
     virtual ~BaseCollector() = default;
-
+    virtual LogCollectorError::ErrorType checkAdminPrivileges() = 0;
     virtual LogCollectorError::ErrorType findAllAgentProcesses() = 0;
     virtual LogCollectorError::ErrorType collectLogsWithTimer() = 0;
     virtual LogCollectorError::ErrorType LogCollectorFile() = 0;

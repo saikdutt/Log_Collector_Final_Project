@@ -187,6 +187,15 @@ LogCollectorError::ErrorType LogCollectorWindows::get_nvm_version()
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
 
+
+/**
+ * @brief Checks if the user has administrative privileges
+ * @note Uses CommonUtils::checkAdminPrivilegesSystem() for system-specific checks
+ * @return LogCollectorError::ErrorType indicating success or failure
+ */
+LogCollectorError::ErrorType LogCollectorWindows::checkAdminPrivileges(){
+    return utils.checkAdminPrivilegesSystem();
+}
 // Write the debug flag to nvm_dbg.conf
 /**
  * @brief Writes the debug configuration file for the NVM agent.
@@ -227,11 +236,7 @@ LogCollectorError::ErrorType LogCollectorWindows::addTroubleshootTag()
  */
 LogCollectorError::ErrorType LogCollectorWindows::setKDFDebugFlag()
 {
-    string hexInput;
-    logger->info("\nEnter debug flag (hexadecimal, e.g., 0x20): ");
-    cin >> hexInput;
-    logger->info("Setting KDF debug flag to: " + hexInput); 
-    utils.setKDFDebugFlagSystem(WinPaths::ACSOCKTOOL, hexInput);
+    utils.setKDFDebugFlagSystem(WinPaths::ACSOCKTOOL);
     logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
     return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
@@ -887,21 +892,21 @@ LogCollectorError::ErrorType LogCollectorWindows::organizeAndArchiveLogs()
         }
 
         std::string desktopPath = std::string(userProfile) + "/Desktop";
-        std::string nvmLogsDir = desktopPath + "/nvm_logs";
+        std::string secureclient = desktopPath + "/secure_client";
         std::string buildPath = fs::current_path().string();
         std::string logCollectorPath = buildPath + "/logcollector.log";
 
-        // 1. Create nvm_logs directory
-        std::string mkdirCmd = "mkdir \"" + nvmLogsDir + "\" 2>nul";
-        logger->info("Creating logs directory: " + nvmLogsDir);
+        // 1. Create secure_client directory
+        std::string mkdirCmd = "mkdir \"" + secureclient + "\" 2>nul";
+        logger->info("Creating logs directory: " + secureclient);
         if (system(mkdirCmd.c_str()) != 0)
         {
-            logger->error("Failed to create nvm_logs directory");
+            logger->error("Failed to create secure_client directory");
             logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
             return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
-        logger->info("Successfully created nvm_logs directory");
-        logger->info("Moving log files to nvm_logs directory");
+        logger->info("Successfully created secure_client directory");
+        logger->info("Moving log files to secure_client directory");
         logger->info("Creating zip archive of logs...");
         logger->info("Successfully created archive: secure_client_logs.zip");
         logger->info("Cleaned up temporary logs directory");
@@ -909,10 +914,10 @@ LogCollectorError::ErrorType LogCollectorWindows::organizeAndArchiveLogs()
         logger->info("Logcollector file cleared successfully");
         logger->info("LogCollectorMacOS destroyed");
         logger->info("Log Collection completed successfully");
-        // 2. First copy logcollector.log to nvm_logs (don't move it)
-        std::string copyCmd = "copy /Y \"" + logCollectorPath + "\" \"" + nvmLogsDir + "\\\" >nul 2>&1";
+        // 2. First copy logcollector.log to secure_client (don't move it)
+        std::string copyCmd = "copy /Y \"" + logCollectorPath + "\" \"" + secureclient + "\\\" >nul 2>&1";
         system(copyCmd.c_str());
-        logger->info("Copied logcollector.log to nvm_logs directory");
+        logger->info("Copied logcollector.log to secure_client directory");
         // Move each file individually (Windows doesn't support moving multiple files in one command)
         std::vector<std::string> logFiles = {
             "kdf_logs.log",
@@ -930,7 +935,7 @@ LogCollectorError::ErrorType LogCollectorWindows::organizeAndArchiveLogs()
             // Check if file exists before attempting to move
             if (fs::exists(sourceFile))
             {
-                std::string moveCmd = "move /Y \"" + sourceFile + "\" \"" + nvmLogsDir + "\\\" >nul 2>&1";
+                std::string moveCmd = "move /Y \"" + sourceFile + "\" \"" + secureclient + "\\\" >nul 2>&1";
                 system(moveCmd.c_str());
             }
         }
@@ -949,15 +954,15 @@ LogCollectorError::ErrorType LogCollectorWindows::organizeAndArchiveLogs()
         // Use PowerShell to create the zip archive
         logger->info("Creating zip archive of logs...");
         std::string zipCmd = "powershell -Command \"Compress-Archive -Path '" +
-                             nvmLogsDir + "' -DestinationPath '" + zipOutputPath + "'\"";
+                             secureclient + "' -DestinationPath '" + zipOutputPath + "'\"";
 
         int zipResult = system(zipCmd.c_str());
         if (zipResult == 0)
         {
             logger->info("Successfully created archive: secure_client_logs_" + timestamp + ".zip");
 
-            // Optional: Clean up nvm_logs directory after successful archive
-            std::string cleanupCmd = "rmdir /S /Q \"" + nvmLogsDir + "\"";
+            // Optional: Clean up secure_client directory after successful archive
+            std::string cleanupCmd = "rmdir /S /Q \"" + secureclient + "\"";
             if (system(cleanupCmd.c_str()) == 0)
             {
                 logger->info("Cleaned up temporary logs directory");
@@ -1367,7 +1372,7 @@ LogCollectorError::ErrorType LogCollectorWindows::collectKdfLogs()
     }
     std::string kdfLogPath = userProfilePath + "\\Desktop\\kdf_logs.log";
     std::string debugViewPath = userProfilePath + "\\Downloads\\Debugview\\Dbgview.exe";
-    std::string cmd = "start \"KDF Log Collection\" \"" + debugViewPath + "\" /k /v /om /l \"" + kdfLogPath + "\"";
+    std::string cmd = "start \"KDF Log Collection\" \"" + debugViewPath + "\" /t /k /v /om /l \"" + kdfLogPath + "\"";
     logger->info("[*] Starting KDF Logs collection...");
     int result = system(cmd.c_str());
     if (result == 0)

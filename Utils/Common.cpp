@@ -9,6 +9,8 @@ namespace fs = std::filesystem;
 #include <array>
 #include <regex>
 #include <thread>
+#include <unistd.h>
+#include <cstdlib>
 #include <atomic>
 #include "Error.h"
 using namespace std;
@@ -23,6 +25,65 @@ void signalHandler(int signum) {
     }
 }   
 
+LogCollectorError::ErrorType CommonUtils::checkAdminPrivilegesSystem() {
+    try {
+        logger->info("Checking for administrative privileges...");
+        
+#if defined(_WIN32) || defined(_WIN64)
+        // Windows-specific code
+        BOOL isAdmin = FALSE;
+        PSID adminGroup;
+        SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+        
+        // Create a SID for the Administrators group
+        if(!AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                     DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+            logger->error("[!] Failed to initialize SID for admin check");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
+        }
+        
+        // Check if the current process has admin rights
+        if(!CheckTokenMembership(NULL, adminGroup, &isAdmin)) {
+            FreeSid(adminGroup);
+            logger->error("[!] Failed to check token membership");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+            return LogCollectorError::ErrorType::COMMAND_FAILED;
+        }
+        
+        FreeSid(adminGroup);
+        
+        if(!isAdmin) {
+            logger->error("[!] This tool requires administrative privileges.");
+            logger->error("[!] Please run as Administrator.");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::PERMISSION_DENIED));
+            return LogCollectorError::ErrorType::PERMISSION_DENIED;
+        }
+#else
+        // macOS and Linux code
+        if (geteuid() != 0) {
+            logger->error("[!] This tool requires administrative privileges.");
+            logger->error("[!] Please run with sudo.");
+            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::PERMISSION_DENIED));
+            return LogCollectorError::ErrorType::PERMISSION_DENIED;
+        }
+#endif
+        
+        logger->info("[+] Administrative privileges confirmed.");
+        logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
+        return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
+    }
+    catch (const LogCollectorError &e) {
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+        return e.getType();
+    }
+    catch (const std::exception &e) {
+        logger->error("Error checking administrative privileges: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
+    }
+}
 
 LogCollectorError::ErrorType CommonUtils::addTroubleshootTagSystem(const std::string& XML_FILE) {
 #if defined(__linux__) // Linux platform
@@ -34,27 +95,33 @@ LogCollectorError::ErrorType CommonUtils::addTroubleshootTagSystem(const std::st
         logger->info("3. Combined logging");
         logger->info("Choice (1-3): ");
         int patternChoice;
-        cin >> patternChoice;
-        if (patternChoice >= 1 && patternChoice <= 3) {
-            switch (patternChoice) {
-                case 1:
-                    pattern = "NVM-TRACE-FLOWS";
-                    break;
-                case 2:
-                    pattern = "PROCESS-TREE-INFO";
-                    break;
-                case 3:
-                    pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
-                    break;
-                default:
-                    logger->error("[!] Invalid choice. Exiting.");
-                    logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-                    return LogCollectorError::ErrorType::COMMAND_FAILED;
+        int a=0;
+        for(int i=1;i<=2;i++){
+            cin >> patternChoice;
+            if (patternChoice >= 1 && patternChoice <= 3) {
+                switch (patternChoice) {
+                    case 1:
+                        pattern = "NVM-TRACE-FLOWS";
+                        break;
+                    case 2:
+                        pattern = "PROCESS-TREE-INFO";
+                        break;
+                    case 3:
+                        pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
+                        break;
+                    default:
+                        logger->error("[!] Invalid choice. Exiting.");
+                        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                        return LogCollectorError::ErrorType::COMMAND_FAILED;
+                }
+                a++;
+                break; // Exit loop on valid input
+            } else {
+                logger->error("[!] Invalid choice. Please try again.");
             }
-        } else {
-            logger->error("[!] Invalid choice. Exiting.");
-            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-            return LogCollectorError::ErrorType::COMMAND_FAILED;
+        }
+        if(a==0){
+            pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
         }
 
         // Create a temp file path in /tmp directory
@@ -201,29 +268,34 @@ LogCollectorError::ErrorType CommonUtils::addTroubleshootTagSystem(const std::st
         logger->info("3. Combined logging");
         logger->info("Choice (1-3): ");
         int patternChoice;
-        cin >> patternChoice;
-        if (patternChoice >= 1 && patternChoice <= 3) {
-            switch (patternChoice) {
-                case 1:
-                    pattern = "NVM-TRACE-FLOWS";
-                    break;
-                case 2:
-                    pattern = "PROCESS-TREE-INFO";
-                    break;
-                case 3:
-                    pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
-                    break;
-                default:
-                    logger->error("[!] Invalid choice. Exiting.");
-                    logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-                    return LogCollectorError::ErrorType::COMMAND_FAILED;
+        int a=0;
+        for(int i=1;i<=2;i++){
+            cin >> patternChoice;
+            if (patternChoice >= 1 && patternChoice <= 3) {
+                switch (patternChoice) {
+                    case 1:
+                        pattern = "NVM-TRACE-FLOWS";
+                        break;
+                    case 2:
+                        pattern = "PROCESS-TREE-INFO";
+                        break;
+                    case 3:
+                        pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
+                        break;
+                    default:
+                        logger->error("[!] Invalid choice. Exiting.");
+                        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+                        return LogCollectorError::ErrorType::COMMAND_FAILED;
+                }
+                a++;
+                break; // Exit loop on valid input
+            } else {
+                logger->error("[!] Invalid choice. Please try again.");
             }
-        } else {
-            logger->error("[!] Invalid choice. Exiting.");
-            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-            return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
-
+        if(a==0){
+            pattern = "PROCESS-TREE-INFO, NVM-TRACE-FLOWS";
+        }
         // First check if XML file exists
         if (!fs::exists(XML_FILE)) {
             logger->error("[!] XML file not found: " + XML_FILE);
@@ -319,16 +391,53 @@ LogCollectorError::ErrorType CommonUtils::addTroubleshootTagSystem(const std::st
 #endif
 }
 
-LogCollectorError::ErrorType CommonUtils::setKDFDebugFlagSystem(const std::string& PATH, const std::string& hexValue) {
+LogCollectorError::ErrorType CommonUtils::setKDFDebugFlagSystem(const std::string& PATH) {
     try {
+        // Get hexadecimal input from user
+        logger->info("[*] Enter KDF debug flag value (hexadecimal, e.g., 0x20 or 20):");
+        std::string hexValue;
+        int a=0;
+        for(int i=1;i<=2;i++){
+            std::cin >> hexValue;
+        
+            // Remove "0x" prefix if present
+            std::string hexValueCopy = hexValue;
+            if (hexValueCopy.size() > 2 && hexValueCopy.substr(0, 2) == "0x") {
+                hexValueCopy = hexValueCopy.substr(2);
+            }
+            
+            // Check if the string contains only valid hexadecimal characters
+            if (hexValueCopy.empty() || 
+                !std::all_of(hexValueCopy.begin(), hexValueCopy.end(), [](char c) {
+                    return std::isxdigit(static_cast<unsigned char>(c));
+                })) {
+                logger->error("[!] Invalid hexadecimal value: " + hexValue);
+                logger->error("[!] Please enter a valid hexadecimal number again (e.g., 0x20 or 20)");
+            }
+            else{
+                a++;
+                break;
+            }
+        }
+        if(a==0){
+            hexValue = "0000000FFFFFFFFF";
+        }
         // Remove "0x" prefix if present
-        std::string hexValueCopy = hexValue; // Create a copy since hexValue is const
+        std::string hexValueCopy = hexValue;
         if (hexValueCopy.size() > 2 && hexValueCopy.substr(0, 2) == "0x") {
             hexValueCopy = hexValueCopy.substr(2);
         }
-        
+            
         // Convert hex string to unsigned long to handle large values
-        unsigned long debugFlag = stoul(hexValueCopy, nullptr, 16);
+        unsigned long debugFlag;
+        try {
+            debugFlag = std::stoul(hexValueCopy, nullptr, 16);
+        } catch (const std::exception& e) {
+            logger->error("[!] Failed to convert hex value: " + hexValue);
+            logger->error("[!] Error: " + std::string(e.what()));
+            return LogCollectorError::ErrorType::INVALID_INPUT;
+        }
+        
         // Check if acsocktool exists
         if (!fs::exists(PATH)) {
             logger->error("[!] acsocktool not found at: " + PATH);
@@ -346,9 +455,9 @@ LogCollectorError::ErrorType CommonUtils::setKDFDebugFlagSystem(const std::strin
         logger->info("[*] Setting KDF debug flag to 0x" + hexValueCopy + "...");
         logger->info("[*] Executing command: " + cmd);
         if (system(cmd.c_str()) == 0) {
-            logger->info("[+] KDF debug flag set successfully");
-        } 
-        else {
+            logger->info("[+] KDF debug flag set successfully to 0x" + hexValueCopy);
+            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
+        } else {
             logger->error("[!] Failed to set KDF debug flag");
             logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
             return LogCollectorError::ErrorType::COMMAND_FAILED;
@@ -362,7 +471,6 @@ LogCollectorError::ErrorType CommonUtils::setKDFDebugFlagSystem(const std::strin
         logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
         return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
-    return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
 }
 
 LogCollectorError::ErrorType CommonUtils::clearKDFDebugFlagSystem(const std::string& PATH) {
@@ -409,7 +517,22 @@ LogCollectorError::ErrorType CommonUtils::writeDebugConfSystem(const std::string
     try {
         logger->info("Enter the debug value");
         int value;
-        cin >> value;
+        int a=0;
+        for(int i=1;i<=2;i++){
+            cin >> value;
+            if (value < 0 || value > 256) {
+                logger->error("[!] Invalid input. Please enter a number between 0 and 256.");
+            } else if((value & (value-1))!=0){
+                logger->error("[!] Invalid input.");
+            }
+            else{
+                a++;
+                break;
+            }
+        }
+        if(a==0){
+            value=256;
+        }
         
 #if defined(__linux__)
         // Linux implementation - use sudo to write to protected directories

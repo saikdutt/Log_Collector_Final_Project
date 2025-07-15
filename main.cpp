@@ -33,9 +33,13 @@ int main() {
     #endif
     logger->info("Logger initialized");
     logger->info("Log Collector Application Started");
-    collector.LogCollectorFile();
     try
     {
+        int admin=collector.checkAdminPrivileges();
+        if(admin!=0){
+            return admin;
+        }
+        collector.LogCollectorFile();
         //Get NVM version
         collector.get_nvm_version();
         collector.writeDebugConf();
@@ -71,9 +75,17 @@ int main() {
         collector.findAllAgentProcesses();
         collector.organizeAndArchiveLogs();
     }
-    catch(const std::exception& e)
+    catch (const LogCollectorError &e)
     {
-        logger->error("Error Occured");
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+        return e.getType();
+    }
+    catch (const std::exception &e)
+    {
+        logger->error("Error finding NVM agent processes: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
     return 0;
 }

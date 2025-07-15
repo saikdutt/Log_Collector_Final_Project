@@ -18,7 +18,7 @@ public:
                   bool enable_debug_logs = false,
                   int debug_level = 0,
                   const std::string& nvm_version = "5.1");
-    
+    virtual ~NVMLogCollector() = default;
     virtual LogCollectorError::ErrorType get_nvm_version() = 0;
     virtual LogCollectorError::ErrorType writeDebugConf() = 0;
     virtual LogCollectorError::ErrorType removeDebugConf() = 0;
