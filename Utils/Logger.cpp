@@ -1,10 +1,7 @@
 #include "Logger.h"
-#include <chrono>
-#include <iomanip>
 #include <sstream>
+#include <iomanip>
 #include <ctime>
-#include <iostream>
-
 std::string Logger::get_timestamp() {
     auto now = std::chrono::system_clock::now();
     auto now_time_t = std::chrono::system_clock::to_time_t(now);
@@ -16,6 +13,10 @@ std::string Logger::get_timestamp() {
 }
 
 void Logger::log(LogLevel level, const std::string& message) {
+     // Only log if message level is >= minimum level
+    if (level < min_log_level) {
+        return;
+    }
     std::string level_str;
     switch (level) {
         case DEBUG: level_str = "DEBUG"; break;
@@ -36,14 +37,14 @@ void Logger::log(LogLevel level, const std::string& message) {
     std::cout << log_message << std::endl;
 }
 
-Logger::Logger(const std::string& log_file) : log_file(log_file) {
-    log_stream.open(log_file, std::ios::out | std::ios::app);
+Logger::Logger(const std::string& log_file, LogLevel min_level) 
+    : log_file(log_file), min_log_level(min_level)  {
+    log_stream.open(log_file, std::ios::out | std::ios::trunc);
     if (!log_stream.is_open()) {
-        throw std::runtime_error("Failed to open log file: " + log_file);
+        std::cerr << "Failed to open log file: " << log_file << std::endl;
     }
     log(INFO, "Logger initialized");
 }
-
 Logger::~Logger() {
     if (log_stream.is_open()) {
         log(INFO, "Logger shutting down");

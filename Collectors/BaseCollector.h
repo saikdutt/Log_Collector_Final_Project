@@ -12,7 +12,7 @@
     namespace fs = std::experimental::filesystem;
 #endif
 #include "../Utils/Logger.h"
-
+#include "../Utils/Error.h"
 class BaseCollector {
 protected:
     std::map<std::string, std::string> config;
@@ -24,6 +24,11 @@ public:
     //virtual void cleanup_logs(bool keep_source = false);
 
     virtual ~BaseCollector() = default;
+    virtual LogCollectorError::ErrorType checkAdminPrivileges() = 0;
+    virtual LogCollectorError::ErrorType findAllAgentProcesses() = 0;
+    virtual LogCollectorError::ErrorType collectLogsWithTimer() = 0;
+    virtual LogCollectorError::ErrorType organizeAndArchiveLogs() = 0;
+    virtual LogCollectorError::ErrorType collectDARTLogs() = 0;
 };
 
 #endif // BASE_COLLECTOR_H

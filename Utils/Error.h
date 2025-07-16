@@ -7,12 +7,12 @@
 class LogCollectorError : public std::runtime_error {
 public:
     enum ErrorType {
-        SYSTEM_NOT_FOUND,
-        PATH_NOT_FOUND,
-        PERMISSION_DENIED,
-        PROCESS_FAILED,
-        FILE_ERROR,
-        NETWORK_ERROR
+        SUCCESSFULLY_RUN = 0,
+        PATH_NOT_FOUND = 1,
+        COMMAND_FAILED = 2,
+        PERMISSION_DENIED = 3,
+        FILE_NOT_FOUND = 4,
+        INVALID_INPUT = 5,
     };
 
     LogCollectorError(ErrorType type, const std::string& message);

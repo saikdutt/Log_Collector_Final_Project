@@ -21,48 +21,70 @@ int main() {
     config["log_file"] = "logcollector.log";
     #ifdef __APPLE__
         // Create NVM collector for macOS
-        NVMLogCollectorMac collector(config, logger);
+        LogCollectorMac collector(config, logger);
     #elif defined(_WIN32)
         // Create NVM collector for Windows
-        NVMLogCollectorWindows collector(config, logger);
+        LogCollectorWindows collector(config, logger);
     #elif defined(__linux__)
         // Create NVM collector for Linux
-        NVMLogCollectorLinux collector(config, logger);
+        LogCollectorLinux collector(config, logger);
     #else
         #error "Unsupported platform"
     #endif
     logger->info("Logger initialized");
     logger->info("Log Collector Application Started");
-    collector.LogCollectorFile();
     try
     {
-        // Get NVM version
+        int admin=collector.checkAdminPrivileges();
+        if(admin!=0){
+            return admin;
+        }
+        //Get NVM version
         collector.get_nvm_version();
-        logger->info("NVM version: " + collector.get_nvm_version_string());
-        collector.findpath();
-        logger->info("Path successfully found in the system");
-        collector.initializePaths();
         collector.writeDebugConf();
         collector.backupServiceProfile();
         collector.addTroubleshootTag();
-        logger->info("Enter the hexadecimal KDF value");
         collector.setKDFDebugFlag();
         collector.createSWGConfigOverride();
-        collector.findNVMAgentProcesses();
-        collector.collectAllLogsSimultaneously();
+        collector.createAllFilesISEPosture();
+        collector.createAllFilesZTA();
+        collector.findAllAgentProcesses();
+        collector.collectKdfLogs();
+        collector.collectNvmLogs();
+        collector.collectPacketCapture();
+        collector.collectUmbrellaLogs();
+        collector.collectIsePostureLogs();
+        collector.collectZtaLogs();
+        collector.collectLogsWithTimer();
+        collector.stopKdfLogs();
+        collector.stopNvmLogs();
+        collector.stopPacketCapture();
+        collector.stopUmbrellaLogs();
+        collector.stopIsePostureLogs();
+        collector.stopZtaLogs();
         logger->info("All logs collected successfully");
         collector.collectDARTLogs();
         logger->info("DART logs collected successfully");
         collector.removeDebugConf();
         collector.clearKDFDebugFlag();
         collector.restoreServiceProfile();
-        collector.findNVMAgentProcesses();
         collector.deleteSWGConfigOverride();
+        collector.deleteAllFilesISEPosture();
+        collector.deleteAllFilesZTA();
+        collector.findAllAgentProcesses();
         collector.organizeAndArchiveLogs();
     }
-    catch(const std::exception& e)
+    catch (const LogCollectorError &e)
     {
-        logger->error("Error Occured");
+        logger->error("Error: " + LogCollectorError::getErrorTypeString(e.getType()));
+        logger->error("Details: " + std::string(e.what()));
+        return e.getType();
+    }
+    catch (const std::exception &e)
+    {
+        logger->error("Error finding NVM agent processes: " + std::string(e.what()));
+        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
+        return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
     return 0;
 }

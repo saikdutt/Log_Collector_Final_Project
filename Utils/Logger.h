@@ -1,13 +1,11 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <string>
 #include <fstream>
 #include <iostream>
-#include <ctime>
-#include <iomanip>
+#include <mutex>
+#include <string>
 #include <memory>
-
 class Logger;
 
 // Logger class definition
@@ -17,19 +15,20 @@ private:
     std::ofstream log_stream;
     std::mutex log_mutex;
     
-    enum LogLevel {
-        DEBUG,
-        INFO,
-        WARNING,
-        ERROR,
-        CRITICAL
-    };
     
+    enum LogLevel {
+        DEBUG = 0,
+        INFO = 1,
+        WARNING = 2,
+        ERROR = 3,
+        CRITICAL = 4
+    };
+    LogLevel min_log_level;
     std::string get_timestamp();
     void log(LogLevel level, const std::string& message);
 
 public:
-    Logger(const std::string& log_file);
+    Logger(const std::string& log_file, LogLevel min_level = INFO);
     ~Logger();
     
     void debug(const std::string& message);
