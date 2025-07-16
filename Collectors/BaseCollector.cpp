@@ -17,6 +17,6 @@ BaseCollector::BaseCollector(const std::map<std::string, std::string>& config, s
     if (logger == nullptr) {
         throw std::runtime_error("Logger cannot be null");
     }
-    logger->debug("BaseCollector initialized");
+    logger->info("BaseCollector initialized");
 }
 

@@ -27,7 +27,6 @@ public:
     virtual LogCollectorError::ErrorType checkAdminPrivileges() = 0;
     virtual LogCollectorError::ErrorType findAllAgentProcesses() = 0;
     virtual LogCollectorError::ErrorType collectLogsWithTimer() = 0;
-    virtual LogCollectorError::ErrorType LogCollectorFile() = 0;
     virtual LogCollectorError::ErrorType organizeAndArchiveLogs() = 0;
     virtual LogCollectorError::ErrorType collectDARTLogs() = 0;
 };

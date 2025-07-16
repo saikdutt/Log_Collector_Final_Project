@@ -24,5 +24,5 @@ NVMLogCollector::NVMLogCollector(
       debug_level(debug_level),
       nvm_version(nvm_version) {
     
-    logger->debug("NVMLogCollector initialized");
+    logger->info("NVMLogCollector initialized");
 }

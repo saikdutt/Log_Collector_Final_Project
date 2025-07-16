@@ -1350,43 +1350,6 @@ LogCollectorError::ErrorType LogCollectorMac::collectDARTLogs()
         return LogCollectorError::ErrorType::COMMAND_FAILED;
     }
 }
-
-/**
- * @brief Clears the log collector file by truncating it
- * @note Uses fs::current_path() to determine the build path
- *       and checks if logcollector.log exists before truncating
- */
-LogCollectorError::ErrorType LogCollectorMac::LogCollectorFile()
-{
-    try
-    {
-        std::string buildPath = fs::current_path().string();
-        std::string logCollectorPath = buildPath + "/logcollector.log";
-        if (fs::exists(logCollectorPath))
-        {
-            std::ofstream logFile(logCollectorPath, std::ios::trunc);
-            if (logFile.is_open())
-            {
-                logFile.close();
-                return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
-            }
-            else
-            {
-                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-                return LogCollectorError::ErrorType::COMMAND_FAILED;
-            }
-        }
-        else
-        {
-            return LogCollectorError::ErrorType::FILE_NOT_FOUND;
-        }
-    }
-    catch (const std::exception &e)
-    {
-        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-        return LogCollectorError::ErrorType::COMMAND_FAILED;
-    }
-}
 /**
  * @brief Organizes collected logs, creates a zip archive, and cleans up
  * @note Moves log files to a dedicated directory on the Desktop
@@ -1421,8 +1384,8 @@ LogCollectorError::ErrorType LogCollectorMac::organizeAndArchiveLogs()
             logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
             return LogCollectorError::ErrorType::COMMAND_FAILED;
         }
-        logger->info("Successfully created nvm_logs directory");
-        logger->info("Moving log files to nvm_logs directory");
+        logger->info("Successfully created secure_client directory");
+        logger->info("Moving log files to secure_client directory");
         logger->info("Creating zip archive of logs...");
         logger->info("Successfully created archive: secure_client_logs.zip");
         logger->info("Cleaned up temporary logs directory");
@@ -1455,7 +1418,7 @@ LogCollectorError::ErrorType LogCollectorMac::organizeAndArchiveLogs()
         }
 
         std::string zipCmd = "cd " + desktopPath + " && zip -r secure_client_logs_" +
-                             timestamp + ".zip nvm_logs/";
+                             timestamp + ".zip secure_client/";
 
         logger->info("Creating zip archive of logs...");
         if (system(zipCmd.c_str()) == 0)

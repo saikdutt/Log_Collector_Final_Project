@@ -8,5 +8,5 @@ SWGLogCollector::SWGLogCollector(
     std::shared_ptr<Logger> logger)
     : BaseCollector(config, logger) {
 
-    logger->debug("SWGLogCollector initialized");
+    logger->info("SWGLogCollector initialized");
 }

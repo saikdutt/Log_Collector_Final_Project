@@ -23,7 +23,6 @@ public:
     LogCollectorError::ErrorType checkAdminPrivileges() override;
     LogCollectorError::ErrorType findAllAgentProcesses() override;
     LogCollectorError::ErrorType collectLogsWithTimer() override;
-    LogCollectorError::ErrorType LogCollectorFile() override;
     LogCollectorError::ErrorType organizeAndArchiveLogs() override;
     LogCollectorError::ErrorType collectDARTLogs() override;
 

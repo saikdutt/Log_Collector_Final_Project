@@ -8,5 +8,5 @@ ISEPostureCollector::ISEPostureCollector(
     std::shared_ptr<Logger> logger)
     : BaseCollector(config, logger) {
 
-    logger->debug("ISEPostureCollector initialized");
+    logger->info("ISEPostureCollector initialized");
 }

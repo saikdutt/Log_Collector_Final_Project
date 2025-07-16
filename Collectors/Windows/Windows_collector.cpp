@@ -833,46 +833,6 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
     return size * nmemb;
 }
 /**
- * @brief Clears the `logcollector.log` file in the current build directory.
- * @note Ensures the log file is reset before starting a new collection.
- * @details Checks if the file exists and truncates it if necessary.
- */
-LogCollectorError::ErrorType LogCollectorWindows::LogCollectorFile()
-{
-    try
-    {
-        std::string buildPath = fs::current_path().string();
-        std::string logCollectorPath = buildPath + "\\logcollector.log";
-        if (fs::exists(logCollectorPath))
-        {
-            std::ofstream logFile(logCollectorPath, std::ios::trunc);
-            if (logFile.is_open())
-            {
-                logFile.close();
-                return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
-            }
-            else
-            {
-                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-                return LogCollectorError::ErrorType::COMMAND_FAILED;
-            }
-        }
-        else
-        {
-            logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-            return LogCollectorError::ErrorType::COMMAND_FAILED;
-        }
-        logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
-        return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
-    }
-    catch (const std::exception &e)
-    {
-        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-        return LogCollectorError::ErrorType::COMMAND_FAILED;
-    }
-}
-
-/**
  * @brief Organizes collected logs into a directory and creates a zip archive.
  * @note Moves logs to a dedicated folder and compresses them with a timestamp.
  * @details Cleans up temporary files after archiving.

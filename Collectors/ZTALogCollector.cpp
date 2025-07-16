@@ -8,6 +8,5 @@ ZTACollector::ZTACollector(
     const std::map<std::string, std::string>& config, 
     std::shared_ptr<Logger> logger)
     : BaseCollector(config, logger) {
-
-    logger->debug("ZTACollector initialized");
+    logger->info("ZTACollector initialized");
 }

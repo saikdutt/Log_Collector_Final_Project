@@ -39,7 +39,6 @@ int main() {
         if(admin!=0){
             return admin;
         }
-        collector.LogCollectorFile();
         //Get NVM version
         collector.get_nvm_version();
         collector.writeDebugConf();

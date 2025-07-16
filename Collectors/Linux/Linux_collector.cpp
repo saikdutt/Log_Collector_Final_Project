@@ -753,46 +753,6 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
     ((std::string *)userp)->append((char *)contents, size * nmemb);
     return size * nmemb;
 }
-
-/**
- * @brief Clears the `logcollector.log` file in the current build directory.
- * @note Ensures the log file is reset before starting a new collection.
- * @details Checks if the file exists and truncates it if necessary.
- */
-LogCollectorError::ErrorType LogCollectorLinux::LogCollectorFile()
-{
-    try
-    {
-        // Get the current build directory path
-        std::string buildPath = fs::current_path().string();
-        std::string logCollectorPath = buildPath + "/logcollector.log";
-        // Check if the file exists
-        if (fs::exists(logCollectorPath))
-        {
-            std::ofstream logFile(logCollectorPath, std::ios::trunc);
-            if (logFile)
-            {
-                logFile.close();
-                return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
-            }
-            else
-            {
-                logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-                return LogCollectorError::ErrorType::COMMAND_FAILED;
-            }
-        }
-        else
-        {
-            logger->info("Returning success: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::SUCCESSFULLY_RUN));
-            return LogCollectorError::ErrorType::SUCCESSFULLY_RUN;
-        }
-    }
-    catch (const std::exception &e)
-    {
-        logger->error("Returning error: " + LogCollectorError::getErrorTypeString(LogCollectorError::ErrorType::COMMAND_FAILED));
-        return LogCollectorError::ErrorType::COMMAND_FAILED;
-    }
-}
 /**
  * @brief Organizes collected logs into a directory and creates a zip archive.
  * @note Moves logs to a dedicated folder and compresses them with a timestamp.
@@ -848,7 +808,7 @@ LogCollectorError::ErrorType LogCollectorLinux::organizeAndArchiveLogs()
         }
 
         std::string zipCmd = "cd " + desktopPath + " && zip -r secure_client_logs_" +
-                             timestamp + ".zip nvm_logs/";
+                             timestamp + ".zip secure_client/";
 
         logger->info("Creating zip archive of logs...");
         if (system(zipCmd.c_str()) == 0)
